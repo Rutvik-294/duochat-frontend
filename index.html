@@ -121,10 +121,17 @@
     .dialog-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
     .dialog-actions .primary, .dialog-actions .secondary { flex: 1; min-height: 46px; }
     .dialog-close { float: right; }
+    .invite-waiting { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 12px; border-radius: 5px; background: #eff6f1; color: #355b4b; font-size: 13px; line-height: 1.45; }
+    .waiting-dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--green-bright); box-shadow: 0 0 0 0 #16a98266; animation: waiting-pulse 1.7s infinite; }
+    .quiet { padding: 0 10px; background: transparent; color: var(--muted); }
+    .quiet:hover { background: #f1f2ee; color: var(--danger); }
+    .cancel-invite { display: block; margin: 8px auto 0; }
+    .opener-button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; white-space: nowrap; }
     .code-input { letter-spacing: 2px; font-variant-numeric: tabular-nums; }
     .toast { position: fixed; z-index: 5; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 15px; border-radius: 5px; background: var(--c-darkest); color: var(--white); box-shadow: 0 6px 24px #0003; font-size: 13px; text-align: center; }
 
     @keyframes message-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes waiting-pulse { 70% { box-shadow: 0 0 0 8px #16a98200; } 100% { box-shadow: 0 0 0 0 #16a98200; } }
     @media (min-width: 1441px) { .messenger { border-radius: 7px; } }
     @media (max-width: 760px) {
       html, body { height: 100%; height: 100dvh; overflow: hidden; }
@@ -142,6 +149,8 @@
       .message { max-width: 90%; }
       .composer { padding: 8px 10px; gap: 8px; }
       .composer textarea { min-height: 42px; padding: 10px 12px; }
+      .opener-button { width: 44px; min-width: 44px; overflow: hidden; padding: 0; font-size: 0; }
+      .opener-button::before { content: "?"; font-size: 16px; }
       .send-button { min-width: 52px; padding: 0 10px; }
       dialog { align-self: flex-end; margin-bottom: env(safe-area-inset-bottom, 0px); }
     }
@@ -192,7 +201,7 @@
       </header>
       <div class="sidebar-heading"><h1>Chats</h1></div>
       <div class="sidebar-tools">
-        <button class="primary" id="newChatButton" type="button">+ New chat</button>
+        <button class="primary" id="newChatButton" type="button">+ Start a chat</button>
         <button class="secondary" id="joinChatButton" type="button">Join with number</button>
       </div>
       <div class="sidebar-tools" style="padding-top:0">
@@ -206,7 +215,7 @@
         <div class="empty-content">
           <div class="empty-mark">D</div>
           <h2>Your chats, together</h2>
-          <p>Create a private chat and share its secure invite link. Only you and the person who joins can read the messages.</p>
+          <p>Start an invite, then wait for the other person to say yes. The room does not exist until they accept. Very exclusive. Two seats.</p>
         </div>
       </div>
       <div id="activeChat" hidden style="display:flex; flex:1; min-height:0; flex-direction:column">
@@ -219,6 +228,7 @@
         <div class="key-warning" id="keyWarning" hidden>This device does not have this chat's encryption key. Re-open the secure invite link on this device.</div>
         <div class="message-log" id="messageLog" aria-live="polite" aria-label="Messages"></div>
         <form class="composer" id="messageForm">
+          <button class="secondary opener-button" id="openerButton" type="button" title="Put a playful conversation starter in the message box">Surprise me</button>
           <textarea id="messageInput" rows="1" maxlength="2000" placeholder="Write a message" aria-label="Message" required></textarea>
           <button class="primary send-button" id="sendButton" type="submit">Send</button>
         </form>
@@ -238,6 +248,11 @@
         <button class="secondary" id="copyNumberButton" type="button">Copy number</button>
         <button class="primary" id="copyLinkButton" type="button">Copy secure link</button>
       </div>
+      <div class="invite-waiting" id="inviteWaiting" hidden aria-live="polite">
+        <span class="waiting-dot" aria-hidden="true"></span>
+        <span id="inviteWaitingText">Invite sent. Your chat is practicing its hello.</span>
+      </div>
+      <button class="quiet cancel-invite" id="cancelInviteButton" type="button" hidden>Cancel invite</button>
       <p class="form-error" id="inviteError" role="status"></p>
     </div>
   </dialog>
@@ -245,8 +260,8 @@
   <dialog id="joinDialog">
     <form class="dialog-inner" id="joinForm">
       <button class="icon-button dialog-close" data-close="joinDialog" type="button" title="Close">Close</button>
-      <h2>Join a chat</h2>
-      <p>Enter the 12-digit invite number and the encryption key from your friend's secure invite.</p>
+      <h2>Accept an invite</h2>
+      <p>Enter the 12-digit number and encryption key. The private room is created when you accept.</p>
       <div class="field">
         <label for="inviteCodeInput">Invite number</label>
         <input class="code-input" id="inviteCodeInput" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{12}" maxlength="12" placeholder="000000000000" required>
@@ -258,7 +273,7 @@
       <p class="form-error" id="joinError" role="alert"></p>
       <div class="dialog-actions">
         <button class="secondary" data-close="joinDialog" type="button">Cancel</button>
-        <button class="primary" id="joinSubmit" type="submit">Join chat</button>
+        <button class="primary" id="joinSubmit" type="submit">Accept invite</button>
       </div>
     </form>
   </dialog>
@@ -270,6 +285,7 @@
     const STORAGE_TOKEN = "duochat:session";
     const STORAGE_KEY_PREFIX = "duochat:key:";
     const STORAGE_USED_INVITES = "duochat:used-invites";
+    const STORAGE_PENDING_INVITE = "duochat:pending-invite";
     const PENDING_CHAT_LABEL = "New chat"; // shown until the other member's name arrives
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
@@ -283,6 +299,9 @@
     let reconnectTimer = 0;
     let invitation = null;
     let inviteCountdownTimer = 0;
+    let pendingInvitePollTimer = 0;
+    let pendingInvite = null;
+    let invitePollInFlight = false;
     let toastTimer = 0;
     let creatingChat = false;
     const renderedMessages = new Set();
@@ -344,6 +363,7 @@
         byId("accountAvatar").textContent = username.slice(0, 1).toUpperCase();
         renderChats();
         await acceptPendingInvite();
+        if (!byId("joinDialog").open) await restorePendingInvite();
       } catch (error) {
         token = "";
         sessionStorage.removeItem(STORAGE_TOKEN);
@@ -368,14 +388,10 @@
       const code = params.get("invite");
       const key = fragments.get("key");
       if (!code || !key) return;
-      try {
-        await joinByInvite(code, key);
-      } catch (error) {
-        showToast(error.message);
-      } finally {
-        // always clean the invite from the URL so it can't be replayed via refresh/back
-        history.replaceState(null, "", location.pathname);
-      }
+      byId("inviteCodeInput").value = code;
+      byId("chatKeyInput").value = key;
+      byId("joinError").textContent = "Your friend is waiting. This button is the actual yes.";
+      byId("joinDialog").showModal();
     }
 
     function usedInvites() {
@@ -416,8 +432,77 @@
       chats.unshift(result.chat);
       renderChats();
       selectChat(result.chat.id);
-      showToast("Invite accepted. This invite link is now used up.");
+      history.replaceState(null, "", location.pathname);
+      showToast("You're in. The room is open; try not to send 47 messages at once.");
       return result.chat;
+    }
+
+    async function restorePendingInvite() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_PENDING_INVITE) || "null");
+        if (!saved?.code || !saved?.keyText || saved.expiresAt <= Date.now()) {
+          localStorage.removeItem(STORAGE_PENDING_INVITE);
+          return;
+        }
+        pendingInvite = saved;
+        showInvitation(saved.code, saved.keyText, saved.expiresAt, null);
+        pollPendingInvite();
+        pendingInvitePollTimer = setInterval(pollPendingInvite, 2500);
+      } catch {
+        localStorage.removeItem(STORAGE_PENDING_INVITE);
+      }
+    }
+
+    async function pollPendingInvite() {
+      if (!pendingInvite || invitePollInFlight) return;
+      invitePollInFlight = true;
+      try {
+        const result = await api(`/api/invites/${encodeURIComponent(pendingInvite.code)}`);
+        if (result.status === "accepted") {
+          const accepted = pendingInvite;
+          clearInterval(pendingInvitePollTimer);
+          pendingInvite = null;
+          localStorage.removeItem(STORAGE_PENDING_INVITE);
+          saveChatKey(result.chat.id, accepted.keyText);
+          upsertChat(result.chat);
+          byId("inviteWaiting").hidden = false;
+          byId("inviteWaitingText").textContent = "They said yes. The room is open, the small talk is optional.";
+          byId("cancelInviteButton").hidden = true;
+          if (byId("inviteDialog").open) byId("inviteDialog").close();
+          selectChat(result.chat.id);
+          showToast("They accepted. Chat room: now officially a room.");
+        } else if (result.status === "expired" || result.status === "cancelled") {
+          clearInterval(pendingInvitePollTimer);
+          pendingInvite = null;
+          localStorage.removeItem(STORAGE_PENDING_INVITE);
+          byId("inviteWaiting").hidden = false;
+          byId("inviteWaitingText").textContent = result.status === "expired"
+            ? "Invite expired. Nobody was pulled into an unwanted conversation."
+            : "Invite canceled. The imaginary typing indicator has been dismissed.";
+          byId("cancelInviteButton").hidden = true;
+        }
+      } catch {
+        if (pendingInvite && byId("inviteDialog").open) {
+          byId("inviteWaitingText").textContent = "Still waiting. The internet is checking its calendar.";
+        }
+      } finally {
+        invitePollInFlight = false;
+      }
+    }
+
+    async function cancelPendingInvite() {
+      if (!pendingInvite) return;
+      try {
+        await api(`/api/invites/${encodeURIComponent(pendingInvite.code)}`, { method: "DELETE" });
+        clearInterval(pendingInvitePollTimer);
+        clearInterval(inviteCountdownTimer);
+        localStorage.removeItem(STORAGE_PENDING_INVITE);
+        pendingInvite = null;
+        byId("inviteDialog").close();
+        showToast("Invite canceled. Your dignity remains intact.");
+      } catch (error) {
+        byId("inviteError").textContent = error.message;
+      }
     }
 
     function memberSignature(chat) {
@@ -639,17 +724,22 @@
 
     async function createChat() {
       if (creatingChat) return; // prevent double-click -> duplicate empty chats
+      if (pendingInvite) {
+        showInvitation(pendingInvite.code, pendingInvite.keyText, pendingInvite.expiresAt, null);
+        return;
+      }
       creatingChat = true;
       byId("newChatButton").disabled = true;
       try {
         const rawKey = crypto.getRandomValues(new Uint8Array(32));
         const keyText = toBase64Url(rawKey);
-        const key = await importChatKey(keyText);
-        const result = await api("/api/chats", { method: "POST", body: "{}" });
-        saveChatKey(result.chat.id, keyText);
-        upsertChat(result.chat);
-        selectChat(result.chat.id);
-        showInvitation(result.inviteCode, keyText, result.expiresAt, result.chat.id);
+        await importChatKey(keyText);
+        const result = await api("/api/invites", { method: "POST", body: "{}" });
+        pendingInvite = { code: result.inviteCode, keyText, expiresAt: result.expiresAt };
+        localStorage.setItem(STORAGE_PENDING_INVITE, JSON.stringify(pendingInvite));
+        showInvitation(result.inviteCode, keyText, result.expiresAt, null);
+        pollPendingInvite();
+        pendingInvitePollTimer = setInterval(pollPendingInvite, 2500);
       } catch (error) {
         showToast(error.message);
       } finally {
@@ -669,17 +759,21 @@
 
     function showInvitation(code, keyText, expiresAt, chatId) {
       const link = `${location.origin}${location.pathname}?invite=${encodeURIComponent(code)}#key=${encodeURIComponent(keyText)}`;
-      invitation = { code, link, chatId };
+      const isPendingRequest = !chatId;
+      invitation = { code, link, chatId, isPendingRequest };
       byId("inviteNumber").textContent = code;
       byId("inviteLink").value = link;
       byId("inviteError").textContent = "";
+      byId("inviteWaiting").hidden = !isPendingRequest;
+      byId("cancelInviteButton").hidden = !isPendingRequest;
+      if (isPendingRequest) byId("inviteWaitingText").textContent = "Invite sent. Your chat is practicing its hello.";
       byId("inviteDialog").showModal();
       clearInterval(inviteCountdownTimer);
       const tick = () => {
         const remaining = new Date(expiresAt).getTime() - Date.now();
         byId("inviteExpiry").textContent = remaining > 0
-          ? `Expires in ${formatDuration(remaining)} · single use`
-          : "This invite has expired.";
+          ? `Expires in ${formatDuration(remaining)} · one yes, one new chat`
+          : "This invite has expired. No chat was created.";
       };
       tick();
       inviteCountdownTimer = setInterval(tick, 1000);
@@ -752,6 +846,7 @@
       event.preventDefault();
       const button = byId("joinSubmit");
       button.disabled = true;
+      byId("joinError").textContent = "";
       try {
         await joinByInvite(byId("inviteCodeInput").value, byId("chatKeyInput").value);
         byId("joinDialog").close();
@@ -776,6 +871,20 @@
       field.style.height = "auto";
       field.style.height = `${Math.min(field.scrollHeight, 130)}px`;
     });
+    byId("openerButton").addEventListener("click", () => {
+      const openers = [
+        "Quick poll: is a hot dog a sandwich?",
+        "What tiny thing improved your day by 3%?",
+        "I need a tie-breaker: tea or coffee?",
+        "What is your most defensible unpopular food opinion?",
+        "Would you rather narrate your day like a documentary or a heist movie?",
+        "Important research: best snack, go."
+      ];
+      const field = byId("messageInput");
+      field.value = openers[Math.floor(Math.random() * openers.length)];
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.focus();
+    });
     byId("shareChatButton").addEventListener("click", async () => {
       const key = getChatKey(activeChatId);
       if (!key) return showToast("This device does not have the chat key.");
@@ -788,6 +897,7 @@
     });
     byId("copyNumberButton").addEventListener("click", () => invitation && copyText(invitation.code));
     byId("copyLinkButton").addEventListener("click", () => invitation && copyText(invitation.link));
+    byId("cancelInviteButton").addEventListener("click", cancelPendingInvite);
     byId("backButton").addEventListener("click", () => byId("messenger").classList.remove("conversation-open"));
     document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => byId(button.dataset.close).close()));
     byId("inviteDialog").addEventListener("close", () => clearInterval(inviteCountdownTimer));

@@ -121,6 +121,10 @@ export class ChatRoom {
 
     if (path === "/api/chats" && request.method === "POST") return this.createChat(request, username);
     if (path === "/api/chats/join" && request.method === "POST") return this.joinChat(request, username);
+    if (path === "/api/invites" && request.method === "POST") return this.createPendingInvite(request, username);
+    const pendingInviteMatch = path.match(/^\/api\/invites\/(\d{12})$/);
+    if (pendingInviteMatch && request.method === "GET") return this.getPendingInvite(request, username, pendingInviteMatch[1]);
+    if (pendingInviteMatch && request.method === "DELETE") return this.cancelPendingInvite(request, username, pendingInviteMatch[1]);
     const inviteMatch = path.match(/^\/api\/chats\/([a-f0-9-]+)\/invite$/);
     if (inviteMatch && request.method === "POST") return this.issueInvite(request, username, inviteMatch[1]);
     return jsonResponse(request, { error: "Not found." }, 404);
@@ -231,6 +235,41 @@ export class ChatRoom {
     return jsonResponse(request, { chat, inviteCode, expiresAt }, 201);
   }
 
+  async createPendingInvite(request, username) {
+    const inviteCode = createInviteCode();
+    const inviteHash = await sha256(inviteCode);
+    const expiresAt = Date.now() + INVITE_LIFETIME;
+    await this.state.storage.put(`invite:${inviteHash}`, { owner: username, expiresAt });
+    return jsonResponse(request, { inviteCode, expiresAt }, 201);
+  }
+
+  async getPendingInvite(request, username, inviteCode) {
+    const inviteHash = await sha256(inviteCode);
+    const invite = await this.state.storage.get(`invite:${inviteHash}`);
+    const result = await this.state.storage.get(`invite-status:${inviteHash}`);
+    if (invite?.owner !== username && result?.owner !== username) {
+      return jsonResponse(request, { error: "Invite not found." }, 404);
+    }
+    if (result?.status === "accepted") return jsonResponse(request, { status: "accepted", chat: result.chat });
+    if (result?.status === "cancelled") return jsonResponse(request, { status: "cancelled" });
+    if (!invite || invite.expiresAt <= Date.now()) return jsonResponse(request, { status: "expired" });
+    return jsonResponse(request, { status: "pending", expiresAt: invite.expiresAt });
+  }
+
+  async cancelPendingInvite(request, username, inviteCode) {
+    const inviteHash = await sha256(inviteCode);
+    const cancelled = await this.state.storage.transaction(async (transaction) => {
+      const inviteKey = `invite:${inviteHash}`;
+      const invite = await transaction.get(inviteKey);
+      if (!invite || invite.owner !== username) return false;
+      await transaction.delete(inviteKey);
+      await transaction.put(`invite-status:${inviteHash}`, { owner: username, status: "cancelled" });
+      return true;
+    });
+    if (!cancelled) return jsonResponse(request, { error: "Invite is no longer pending." }, 404);
+    return jsonResponse(request, { status: "cancelled" });
+  }
+
   async issueInvite(request, username, chatId) {
     const inviteCode = createInviteCode();
     const inviteHash = await sha256(inviteCode);
@@ -263,6 +302,19 @@ export class ChatRoom {
       const inviteKey = `invite:${inviteHash}`;
       const invite = await transaction.get(inviteKey);
       if (!invite || invite.expiresAt <= Date.now()) return null;
+      if (invite.owner) {
+        if (invite.owner === username) return null;
+        const chat = {
+          id: crypto.randomUUID(),
+          members: [invite.owner, username],
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        await transaction.put(`chat:${chat.id}`, chat);
+        await transaction.delete(inviteKey);
+        await transaction.put(`invite-status:${inviteHash}`, { owner: invite.owner, status: "accepted", chat });
+        return { chat, added: true };
+      }
       const chatKey = `chat:${invite.chatId}`;
       const chat = await transaction.get(chatKey);
       if (!chat || chat.members.length >= 2 && !chat.members.includes(username)) return null;
