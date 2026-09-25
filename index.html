@@ -28,6 +28,7 @@
     body { margin: 0; min-width: 0; height: 100vh; height: 100dvh; color: var(--ink); background: #dce3de; }
     button, input, textarea { font: inherit; }
     button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
     button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #83d7bd; outline-offset: 2px; }
     [hidden] { display: none !important; }
 
@@ -51,7 +52,7 @@
       min-height: 42px; border: 0; border-radius: 5px; font-weight: 700; transition: background .16s ease, transform .16s ease;
     }
     .primary { padding: 0 18px; color: var(--white); background: var(--green); }
-    .primary:hover { background: var(--green-dark); }
+    .primary:hover:not(:disabled) { background: var(--green-dark); }
     .primary:active, .secondary:active { transform: translateY(1px); }
     .auth-submit { width: 100%; margin-top: 8px; }
     .auth-switch { width: 100%; margin-top: 15px; border: 0; background: transparent; color: var(--green-dark); font-weight: 700; padding: 10px; }
@@ -70,10 +71,10 @@
     .sidebar-heading { display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 11px; }
     .sidebar-heading h1 { margin: 0; font: 800 22px "Manrope", sans-serif; }
     .secondary { padding: 0 13px; background: #e4f3ec; color: var(--green-dark); }
-    .secondary:hover { background: #d4ecdf; }
+    .secondary:hover:not(:disabled) { background: #d4ecdf; }
     .sidebar-tools { display: flex; gap: 8px; padding: 0 14px 14px; }
     .search { width: 100%; height: 40px; padding: 0 13px; border: 0; border-radius: 5px; background: #f1f4f1; color: var(--ink); }
-    .chat-list { overflow-y: auto; flex: 1; border-top: 1px solid var(--line); }
+    .chat-list { overflow-y: auto; flex: 1; min-height: 0; border-top: 1px solid var(--line); overscroll-behavior: contain; }
     .chat-row { width: 100%; min-height: 76px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 0; border-bottom: 1px solid #edf0ed; background: var(--white); text-align: left; }
     .chat-row:hover { background: #f6f8f6; }
     .chat-row.selected { background: #e8f3ed; }
@@ -82,8 +83,8 @@
     .chat-row-preview { display: block; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
     .list-empty { padding: 28px 22px; color: var(--muted); text-align: center; font-size: 13px; line-height: 1.6; }
 
-    .conversation { position: relative; min-width: 0; display: flex; flex-direction: column; background-color: var(--wall); background-image: radial-gradient(#74827612 1px, transparent 1px), radial-gradient(#7482760c 1px, transparent 1px); background-size: 22px 22px, 31px 31px; background-position: 0 0, 12px 15px; }
-    .conversation-empty { display: grid; flex: 1; place-items: center; padding: 32px; text-align: center; }
+    .conversation { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background-color: var(--wall); background-image: radial-gradient(#74827612 1px, transparent 1px), radial-gradient(#7482760c 1px, transparent 1px); background-size: 22px 22px, 31px 31px; background-position: 0 0, 12px 15px; }
+    .conversation-empty { display: grid; flex: 1; min-height: 0; place-items: center; padding: 32px; text-align: center; overflow-y: auto; }
     .empty-content { max-width: 360px; }
     .empty-mark { width: 74px; height: 74px; display: grid; place-items: center; margin: 0 auto 18px; border: 1px solid #c7d2c9; border-radius: 50%; color: var(--green); background: #f7f8f3; font: 800 23px "Manrope", sans-serif; }
     .conversation-empty h2 { margin: 0 0 9px; font: 800 23px "Manrope", sans-serif; }
@@ -94,13 +95,13 @@
     .chat-status { margin-top: 3px; color: var(--muted); font-size: 12px; }
     .chat-status.connected { color: var(--green); }
     .back-button { display: none; }
-    .message-log { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px clamp(14px, 5vw, 72px); scroll-behavior: smooth; }
+    .message-log { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px clamp(14px, 5vw, 72px); scroll-behavior: smooth; overscroll-behavior: contain; }
     .message { max-width: min(76%, 640px); padding: 9px 11px 7px; border-radius: 6px; background: var(--white); box-shadow: 0 1px 1px #233d3012; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.45; animation: message-in .18s ease-out both; }
     .message.mine { align-self: flex-end; background: #d8f5e5; }
     .message-meta { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; color: #738178; font-size: 10px; }
     .system-note { align-self: center; max-width: 90%; padding: 7px 11px; border-radius: 5px; background: #fff9d9; color: #667163; text-align: center; font-size: 12px; }
     .composer { display: flex; align-items: flex-end; gap: 10px; padding: 13px clamp(12px, 3vw, 34px); background: #f3f6f2; }
-    .composer textarea { min-height: 44px; max-height: 130px; flex: 1; resize: vertical; padding: 12px 14px; border: 1px solid #dce5df; border-radius: 6px; background: var(--white); color: var(--ink); }
+    .composer textarea { min-height: 44px; max-height: 130px; flex: 1; resize: none; padding: 12px 14px; border: 1px solid #dce5df; border-radius: 6px; background: var(--white); color: var(--ink); }
     .send-button { min-width: 72px; height: 44px; }
     .key-warning { padding: 14px 18px; color: #795b15; background: #fff3c9; text-align: center; font-size: 13px; }
 
@@ -141,6 +142,7 @@
     }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; } }
   </style>
+<base target="_blank">
 </head>
 <body>
   <section class="auth-screen" id="authScreen">
@@ -215,7 +217,7 @@
     <div class="dialog-inner">
       <button class="icon-button dialog-close" data-close="inviteDialog" type="button" title="Close">Close</button>
       <h2>Invite someone</h2>
-      <p>This number admits one other account and expires in 30 minutes. Share the secure link so the other person also receives the encryption key.</p>
+      <p>This number admits one other account, works once, and expires in 30 minutes. Share the secure link so the other person also receives the encryption key.</p>
       <div class="invite-number" id="inviteNumber"></div>
       <p class="invite-expiry" id="inviteExpiry"></p>
       <input class="search" id="inviteLink" aria-label="Secure invite link" readonly>
@@ -243,7 +245,7 @@
       <p class="form-error" id="joinError" role="alert"></p>
       <div class="dialog-actions">
         <button class="secondary" data-close="joinDialog" type="button">Cancel</button>
-        <button class="primary" type="submit">Join chat</button>
+        <button class="primary" id="joinSubmit" type="submit">Join chat</button>
       </div>
     </form>
   </dialog>
@@ -254,6 +256,8 @@
     const API_BASE = WORKER_URL.replace(/^wss:/, "https:").replace(/\/ws$/, "");
     const STORAGE_TOKEN = "duochat:session";
     const STORAGE_KEY_PREFIX = "duochat:key:";
+    const STORAGE_USED_INVITES = "duochat:used-invites";
+    const PENDING_CHAT_LABEL = "New chat"; // shown until the other member's name arrives
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
 
@@ -263,8 +267,12 @@
     let chats = [];
     let activeChatId = "";
     let ws = null;
+    let reconnectTimer = 0;
     let invitation = null;
+    let inviteCountdownTimer = 0;
     let toastTimer = 0;
+    let creatingChat = false;
+    const renderedMessages = new Set();
 
     const byId = (id) => document.getElementById(id);
 
@@ -316,7 +324,7 @@
     async function loadApp() {
       try {
         const result = await api("/api/chats");
-        chats = result.chats || [];
+        chats = dedupeChats(result.chats || []);
         byId("authScreen").hidden = true;
         byId("messenger").hidden = false;
         byId("accountName").textContent = username;
@@ -332,6 +340,15 @@
       }
     }
 
+    async function refreshChats() {
+      try {
+        const result = await api("/api/chats");
+        chats = dedupeChats(result.chats || []);
+        renderChats();
+        if (activeChatId) updateChatHeader(activeChatId);
+      } catch { }
+    }
+
     async function acceptPendingInvite() {
       const params = new URLSearchParams(location.search);
       const fragments = new URLSearchParams(location.hash.slice(1));
@@ -340,19 +357,75 @@
       if (!code || !key) return;
       try {
         await joinByInvite(code, key);
-        history.replaceState(null, "", location.pathname);
       } catch (error) {
         showToast(error.message);
+      } finally {
+        // always clean the invite from the URL so it can't be replayed via refresh/back
+        history.replaceState(null, "", location.pathname);
       }
     }
 
+    function usedInvites() {
+      try { return new Set(JSON.parse(localStorage.getItem(STORAGE_USED_INVITES) || "[]")); }
+      catch { return new Set(); }
+    }
+
+    function markInviteUsed(code) {
+      const set = usedInvites();
+      set.add(code);
+      localStorage.setItem(STORAGE_USED_INVITES, JSON.stringify([...set]));
+    }
+
+    // Best-effort server-side invalidation: if the Worker doesn't expose this
+    // endpoint yet, the error is swallowed and the local guard still applies.
+    async function invalidateInvite(code) {
+      try { await api(`/api/invites/${encodeURIComponent(code)}/invalidate`, { method: "POST", body: "{}" }); } catch { }
+    }
+
     async function joinByInvite(code, keyText) {
+      code = (code || "").trim();
+      keyText = (keyText || "").trim();
+      if (!/^[0-9]{12}$/.test(code)) throw new Error("Enter the full 12-digit invite number.");
+      if (usedInvites().has(code)) throw new Error("This invite has already been used.");
       await importChatKey(keyText);
       const result = await api("/api/chats/join", { method: "POST", body: JSON.stringify({ code }) });
+      markInviteUsed(code);
+      invalidateInvite(code); // fire-and-forget
       saveChatKey(result.chat.id, keyText);
-      upsertChat(result.chat);
+      // If we already have a chat with these exact members, drop the stale copy
+      // so inviting the same person again never produces duplicate chats.
+      const sig = memberSignature(result.chat);
+      chats = chats.filter((item) => item.id !== result.chat.id || memberSignature(item) !== sig);
+      chats = chats.filter((item) => item.id !== result.chat.id);
+      if (sig.split("|").length >= 2) {
+        chats = chats.filter((item) => memberSignature(item) !== sig);
+      }
+      chats.unshift(result.chat);
+      renderChats();
       selectChat(result.chat.id);
+      showToast("Invite accepted. This invite link is now used up.");
       return result.chat;
+    }
+
+    function memberSignature(chat) {
+      return [...(chat.members || [])].sort().join("|");
+    }
+
+    function dedupeChats(list) {
+      const seen = new Set();
+      const kept = [];
+      for (const chat of list) {
+        const sig = memberSignature(chat);
+        // Only collapse chats that actually have the same full member list;
+        // never merge two still-empty chats that may get different friends.
+        const mergeable = sig.split("|").length >= 2;
+        if (mergeable) {
+          if (seen.has(sig)) continue;
+          seen.add(sig);
+        }
+        kept.push(chat);
+      }
+      return kept;
     }
 
     function renderChats() {
@@ -368,13 +441,13 @@
         return;
       }
       for (const chat of filtered) {
-        const other = chat.members.find((member) => member !== username) || "Waiting for a friend";
+        const other = chat.members.find((member) => member !== username) || PENDING_CHAT_LABEL;
         const button = document.createElement("button");
         button.type = "button";
         button.className = `chat-row${chat.id === activeChatId ? " selected" : ""}`;
         const avatar = document.createElement("span");
         avatar.className = "avatar";
-        avatar.textContent = other === "Waiting for a friend" ? "?" : other.slice(0, 1).toUpperCase();
+        avatar.textContent = other === PENDING_CHAT_LABEL ? "?" : other.slice(0, 1).toUpperCase();
         const copy = document.createElement("span");
         copy.className = "chat-row-copy";
         const name = document.createElement("span");
@@ -382,7 +455,7 @@
         name.textContent = other;
         const preview = document.createElement("span");
         preview.className = "chat-row-preview";
-        preview.textContent = "End-to-end encrypted";
+        preview.textContent = other === PENDING_CHAT_LABEL ? "Invite pending — share the link" : "End-to-end encrypted";
         copy.append(name, preview);
         button.append(avatar, copy);
         button.addEventListener("click", () => selectChat(chat.id));
@@ -391,7 +464,11 @@
     }
 
     function upsertChat(chat) {
+      const sig = memberSignature(chat);
       chats = chats.filter((item) => item.id !== chat.id);
+      if (sig.split("|").length >= 2) {
+        chats = chats.filter((item) => memberSignature(item) !== sig);
+      }
       chats.unshift(chat);
       renderChats();
     }
@@ -410,23 +487,39 @@
       return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
     }
 
+    function updateChatHeader(id) {
+      const chat = chats.find((item) => item.id === id);
+      if (!chat) return;
+      const other = chat.members.find((member) => member !== username) || PENDING_CHAT_LABEL;
+      byId("chatName").textContent = other;
+      byId("chatAvatar").textContent = other === PENDING_CHAT_LABEL ? "?" : other.slice(0, 1).toUpperCase();
+      byId("shareChatButton").hidden = chat.members.length >= 2;
+    }
+
     async function selectChat(id) {
+      if (id === activeChatId && ws && ws.readyState === WebSocket.OPEN) {
+        renderChats();
+        return;
+      }
       activeChatId = id;
       const chat = chats.find((item) => item.id === id);
       if (!chat) return;
-      const other = chat.members.find((member) => member !== username) || "Waiting for a friend";
-      byId("chatName").textContent = other;
-      byId("chatAvatar").textContent = other === "Waiting for a friend" ? "?" : other.slice(0, 1).toUpperCase();
-      byId("shareChatButton").hidden = chat.members.length >= 2;
+      updateChatHeader(id);
       byId("emptyState").hidden = true;
       byId("activeChat").hidden = false;
       byId("messenger").classList.add("conversation-open");
-      byId("messageLog").replaceChildren();
-      byId("keyWarning").hidden = Boolean(getChatKey(id));
-      byId("messageInput").disabled = !getChatKey(id);
-      byId("sendButton").disabled = !getChatKey(id);
+      const log = byId("messageLog");
+      log.replaceChildren();
+      renderedMessages.clear();
+      log.scrollTop = log.scrollHeight;
+      const hasKey = Boolean(getChatKey(id));
+      byId("keyWarning").hidden = hasKey;
+      byId("messageInput").disabled = !hasKey;
+      byId("sendButton").disabled = !hasKey;
       renderChats();
       connectToChat(id);
+      // Pick up the other member's name if the server has it now.
+      refreshChats();
     }
 
     function setChatStatus(text, connected = false) {
@@ -436,8 +529,10 @@
     }
 
     function connectToChat(id) {
+      clearTimeout(reconnectTimer);
       if (ws) ws.close();
       setChatStatus("Connecting");
+      let settled = false;
       ws = new WebSocket(`${WORKER_URL}?chat=${encodeURIComponent(id)}`);
       const activeSocket = ws;
       activeSocket.addEventListener("open", () => activeSocket.send(JSON.stringify({ type: "auth", token })));
@@ -446,26 +541,38 @@
         let data;
         try { data = JSON.parse(event.data); } catch { return; }
         if (data.type === "ready") {
+          settled = true;
           setChatStatus(getChatKey(id) ? "End-to-end encrypted" : "Encryption key missing", Boolean(getChatKey(id)));
           for (const message of data.messages || []) await addMessage(message, id);
+          scrollLogToBottom();
         } else if (data.type === "chat_updated") {
           upsertChat(data.chat);
-          const other = data.chat.members.find((member) => member !== username) || "Waiting for a friend";
-          byId("chatName").textContent = other;
-          byId("chatAvatar").textContent = other === "Waiting for a friend" ? "?" : other.slice(0, 1).toUpperCase();
-          byId("shareChatButton").hidden = data.chat.members.length >= 2;
+          updateChatHeader(id);
         } else if (data.type === "chat") {
           await addMessage(data.message, id);
         } else if (data.type === "error") {
+          settled = true;
           setChatStatus(data.error || "Connection rejected");
         }
       });
       activeSocket.addEventListener("close", () => {
-        if (activeSocket === ws && id === activeChatId) setChatStatus("Disconnected");
+        if (activeSocket === ws && id === activeChatId) {
+          if (!settled) {
+            setChatStatus("Disconnected");
+          } else {
+            setChatStatus("Reconnecting…");
+            reconnectTimer = setTimeout(() => { if (activeChatId === id) connectToChat(id); }, 2000);
+          }
+        }
       });
       activeSocket.addEventListener("error", () => {
         if (activeSocket === ws && id === activeChatId) setChatStatus("Connection error");
       });
+    }
+
+    function scrollLogToBottom() {
+      const log = byId("messageLog");
+      log.scrollTop = log.scrollHeight;
     }
 
     async function encryptText(key, text) {
@@ -482,6 +589,10 @@
 
     async function addMessage(message, chatId) {
       if (chatId !== activeChatId) return;
+      // Guard against duplicates when history replay and live events overlap.
+      const messageKey = message.id || `${message.ts}:${message.sender}`;
+      if (renderedMessages.has(messageKey)) return;
+      renderedMessages.add(messageKey);
       const keyText = getChatKey(chatId);
       let text;
       try {
@@ -503,11 +614,15 @@
       time.textContent = new Date(message.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       meta.append(sender, time);
       bubble.append(content, meta);
-      byId("messageLog").append(bubble);
-      byId("messageLog").scrollTop = byId("messageLog").scrollHeight;
+      const log = byId("messageLog");
+      log.append(bubble);
+      scrollLogToBottom();
     }
 
     async function createChat() {
+      if (creatingChat) return; // prevent double-click -> duplicate empty chats
+      creatingChat = true;
+      byId("newChatButton").disabled = true;
       try {
         const rawKey = crypto.getRandomValues(new Uint8Array(32));
         const keyText = toBase64Url(rawKey);
@@ -519,7 +634,19 @@
         showInvitation(result.inviteCode, keyText, result.expiresAt, result.chat.id);
       } catch (error) {
         showToast(error.message);
+      } finally {
+        creatingChat = false;
+        byId("newChatButton").disabled = false;
       }
+    }
+
+    function formatDuration(ms) {
+      const total = Math.max(0, Math.floor(ms / 1000));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const seconds = total % 60;
+      const two = (n) => String(n).padStart(2, "0");
+      return hours ? `${hours}:${two(minutes)}:${two(seconds)}` : `${two(minutes)}:${two(seconds)}`;
     }
 
     function showInvitation(code, keyText, expiresAt, chatId) {
@@ -527,9 +654,17 @@
       invitation = { code, link, chatId };
       byId("inviteNumber").textContent = code;
       byId("inviteLink").value = link;
-      byId("inviteExpiry").textContent = `Expires ${new Date(expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       byId("inviteError").textContent = "";
       byId("inviteDialog").showModal();
+      clearInterval(inviteCountdownTimer);
+      const tick = () => {
+        const remaining = new Date(expiresAt).getTime() - Date.now();
+        byId("inviteExpiry").textContent = remaining > 0
+          ? `Expires in ${formatDuration(remaining)} · single use`
+          : "This invite has expired.";
+      };
+      tick();
+      inviteCountdownTimer = setInterval(tick, 1000);
     }
 
     async function copyText(text) {
@@ -545,12 +680,17 @@
       event.preventDefault();
       const input = byId("messageInput");
       const text = input.value.trim();
-      if (!text || !ws || ws.readyState !== WebSocket.OPEN || !activeChatId) return;
+      if (!text || !activeChatId) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showToast("Not connected yet — try again in a moment.");
+        return;
+      }
       try {
         const key = await importChatKey(getChatKey(activeChatId));
         const encrypted = await encryptText(key, text);
         ws.send(JSON.stringify({ type: "chat", text: encrypted }));
         input.value = "";
+        input.style.height = "auto";
       } catch {
         showToast("Could not encrypt this message.");
       }
@@ -592,6 +732,8 @@
     });
     byId("joinForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const button = byId("joinSubmit");
+      button.disabled = true;
       try {
         await joinByInvite(byId("inviteCodeInput").value, byId("chatKeyInput").value);
         byId("joinDialog").close();
@@ -599,6 +741,8 @@
         byId("chatKeyInput").value = "";
       } catch (error) {
         byId("joinError").textContent = error.message;
+      } finally {
+        button.disabled = false;
       }
     });
     byId("chatSearch").addEventListener("input", renderChats);
@@ -608,6 +752,11 @@
         event.preventDefault();
         byId("messageForm").requestSubmit();
       }
+    });
+    byId("messageInput").addEventListener("input", (event) => {
+      const field = event.target;
+      field.style.height = "auto";
+      field.style.height = `${Math.min(field.scrollHeight, 130)}px`;
     });
     byId("shareChatButton").addEventListener("click", async () => {
       const key = getChatKey(activeChatId);
@@ -623,14 +772,23 @@
     byId("copyLinkButton").addEventListener("click", () => invitation && copyText(invitation.link));
     byId("backButton").addEventListener("click", () => byId("messenger").classList.remove("conversation-open"));
     document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => byId(button.dataset.close).close()));
+    byId("inviteDialog").addEventListener("close", () => clearInterval(inviteCountdownTimer));
     byId("logoutButton").addEventListener("click", async () => {
       try { await api("/api/logout", { method: "POST", body: "{}" }); } catch { }
+      clearTimeout(reconnectTimer);
       if (ws) ws.close();
       ws = null;
       token = "";
       username = "";
+      chats = [];
+      activeChatId = "";
+      renderedMessages.clear();
       sessionStorage.removeItem(STORAGE_TOKEN);
       byId("messenger").hidden = true;
+      byId("activeChat").hidden = true;
+      byId("emptyState").hidden = false;
+      byId("messenger").classList.remove("conversation-open");
+      byId("messageLog").replaceChildren();
       byId("authScreen").hidden = false;
       byId("passwordInput").value = "";
       byId("authError").textContent = "";
