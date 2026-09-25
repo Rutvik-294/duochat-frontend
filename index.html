@@ -283,7 +283,19 @@
       const headers = new Headers(options.headers || {});
       headers.set("Content-Type", "application/json");
       if (token) headers.set("Authorization", `Bearer ${token}`);
-      const response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
+      let response;
+      try {
+        response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
+      } catch (error) {
+        if (error instanceof TypeError) {
+          throw new Error("Can't reach DuoChat's Worker. Its account API may not be deployed yet. Deploy the latest src/index.js with Wrangler, then retry.");
+        }
+        throw error;
+      }
+      const contentType = response.headers.get("Content-Type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("The DuoChat Worker is running an older version. Deploy the latest src/index.js with Wrangler, then retry.");
+      }
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "The request could not be completed.");
       return result;
