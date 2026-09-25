@@ -5,8 +5,6 @@ import {
   signInWithPopup, 
   signInWithRedirect,
   getRedirectResult,
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
   signOut as fbSignOut, 
   onAuthStateChanged,
   updateProfile
@@ -408,8 +406,6 @@ export async function deleteFirestoreChat(chatId) {
 }
 
 export {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,

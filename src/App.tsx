@@ -5,8 +5,6 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
   fbSignOut,
   onAuthStateChanged,
   getUserProfile,
@@ -146,14 +144,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [usernameInput, setUsernameInput] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState('');
   const [googleError, setGoogleError] = useState('');
-  const [showGoogleFeedback, setShowGoogleFeedback] = useState(false);
+  const [showRedirectOption, setShowRedirectOption] = useState(false);
 
   // App & Navigation State
   const [chats, setChats] = useState<Chat[]>([]);
@@ -290,7 +282,8 @@ export default function App() {
         }
       })
       .catch((err: any) => {
-        console.warn('Redirect credential notice:', err);
+        console.error('Google redirect sign-in failed:', err);
+        setGoogleError(getGoogleAuthMessage(err));
       });
 
     return () => unsub();
@@ -400,10 +393,28 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, partnerTyping]);
 
-  // Google Sign In
+  const getGoogleAuthMessage = (err: any) => {
+    const code = err?.code || '';
+    const host = window.location.hostname;
+    if (code === 'auth/unauthorized-domain') {
+      return `Google sign-in is blocked for ${host}. In Firebase Console, open Authentication → Settings → Authorized domains and add ${host}.`;
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Authentication → Sign-in method.';
+    }
+    if (code === 'auth/popup-blocked') {
+      return 'Your browser blocked the Google sign-in popup. Use Continue with redirect below.';
+    }
+    if (code === 'auth/popup-closed-by-user') {
+      return 'The Google sign-in window was closed before sign-in completed.';
+    }
+    return (err?.message || 'Google sign-in failed. Please try again.').replace('Firebase: ', '');
+  };
+
+  // Google-only sign-in
   const handleGoogleSignIn = async () => {
     setGoogleError('');
-    setShowGoogleFeedback(false);
+    setShowRedirectOption(false);
     setGoogleLoading(true);
     try {
       const res = await signInWithPopup(auth, googleProvider);
@@ -412,15 +423,11 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Google Sign-in error:', err);
-      const code = err?.code || '';
-      const msg = err?.message || String(err);
-      setShowGoogleFeedback(true);
-      if (code === 'auth/popup-blocked' || msg.includes('popup-blocked')) {
-        setGoogleError('Google sign-in popup was blocked. Click Try Redirect below:');
-      } else if (code === 'auth/unauthorized-domain') {
-        setGoogleError('Domain is not in authorized domains. Use ⚡ Instant Demo Account below!');
+      if (err?.code === 'auth/popup-blocked') {
+        setGoogleError(getGoogleAuthMessage(err));
+        setShowRedirectOption(true);
       } else {
-        setGoogleError(msg.replace('Firebase: ', ''));
+        setGoogleError(getGoogleAuthMessage(err));
       }
     } finally {
       setGoogleLoading(false);
@@ -428,68 +435,15 @@ export default function App() {
   };
 
   const handleGoogleRedirect = async () => {
+    setGoogleError('');
+    setShowRedirectOption(false);
+    setGoogleLoading(true);
     try {
       await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
-      setGoogleError(err.message || 'Redirect failed');
-    }
-  };
-
-  // Instant Demo Account
-  const handleDemoLogin = async () => {
-    setAuthLoading(true);
-    const demoUid = `demo_${Math.random().toString(36).substring(2, 9)}`;
-    const demoHandle = `tester_${Math.random().toString(36).substring(2, 6)}`;
-    const fakeUser = {
-      uid: demoUid,
-      email: `${demoHandle}@duochat.local`,
-      displayName: `Tester (@${demoHandle})`,
-      username: demoHandle
-    };
-    try {
-      await claimUsername(demoUid, demoHandle, fakeUser.email);
-    } catch {
-      // fallback
-    }
-    setCurrentUser(fakeUser);
-    setAuthLoading(false);
-    showToast(`Signed in as @${demoHandle}!`);
-  };
-
-  // Email / Password Submit
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-
-    const email = emailInput.trim();
-    const password = passwordInput;
-    const desired = usernameInput.trim().toLowerCase();
-
-    if (!email || !password) {
-      setAuthError('Please fill in both email and password.');
-      return;
-    }
-
-    try {
-      if (authMode === 'register') {
-        if (!desired) {
-          setAuthError('Please choose a handle for DuoChat.');
-          return;
-        }
-        if (!/^[a-z0-9_]{3,24}$/.test(desired)) {
-          setAuthError('Handle must be 3-24 letters, numbers, or underscores.');
-          return;
-        }
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        await claimUsername(cred.user.uid, desired, email);
-        await handleAuthenticatedUser(cred.user);
-      } else {
-        const cred = await signInWithEmailAndPassword(auth, email, password);
-        await handleAuthenticatedUser(cred.user);
-      }
-    } catch (err: any) {
-      console.error('Auth error:', err);
-      setAuthError(err.message.replace('Firebase: ', ''));
+      console.error('Google redirect sign-in failed:', err);
+      setGoogleError(getGoogleAuthMessage(err));
+      setGoogleLoading(false);
     }
   };
 
@@ -752,12 +706,8 @@ export default function App() {
             <span>duochat<span className="brand-dot">.</span></span>
           </a>
           <p className="eyebrow">YOUR PRIVATE CORNER</p>
-          <h1>{authMode === 'register' ? 'Make this space yours.' : <>Good conversations<br />start here.</>}</h1>
-          <p className="auth-description">
-            {authMode === 'register'
-              ? 'Create a secure account with your email and custom handle.'
-              : 'Sign in to get back to your space. Just you, your person, and the conversation.'}
-          </p>
+          <h1>Good conversations<br />start here.</h1>
+          <p className="auth-description">Sign in with Google to get back to your space. Just you, your person, and the conversation.</p>
 
           {/* Google Sign In */}
           <button
@@ -765,7 +715,7 @@ export default function App() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
-            style={{ opacity: googleLoading ? 0.75 : 1 }}
+            aria-busy={googleLoading}
           >
             <svg className="google-icon" viewBox="0 0 24 24" width="18" height="18">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -776,111 +726,13 @@ export default function App() {
             <span>{googleLoading ? 'Connecting to Google...' : 'Continue with Google'}</span>
           </button>
 
-          {showGoogleFeedback && (
-            <div style={{ marginTop: 10 }}>
-              <p className="form-error" style={{ margin: 0, textAlign: 'center' }}>{googleError}</p>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8 }}>
-                <button type="button" className="secondary" onClick={handleGoogleRedirect} style={{ minHeight: 32, fontSize: 11, padding: '0 10px' }}>
-                  Try Redirect
-                </button>
-                <button type="button" className="secondary" onClick={() => window.open(window.location.href, '_blank')} style={{ minHeight: 32, fontSize: 11, padding: '0 10px' }}>
-                  Open in New Tab
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="auth-divider">
-            <span>or sign in</span>
-          </div>
-
-          <form onSubmit={handleAuthSubmit} noValidate>
-            {authMode === 'register' && (
-              <div style={{ marginBottom: 14 }}>
-                <label className="field-label" htmlFor="usernameInput">Username Handle</label>
-                <input
-                  className="auth-input"
-                  id="usernameInput"
-                  name="username"
-                  autoComplete="username"
-                  minLength={3}
-                  maxLength={24}
-                  value={usernameInput}
-                  onChange={(e) => setUsernameInput(e.target.value)}
-                  placeholder="yourname"
-                  required
-                />
-                <p className="field-hint">3-24 letters, numbers, or underscores</p>
-              </div>
-            )}
-
-            <label className="field-label" htmlFor="emailInput">Email</label>
-            <input
-              className="auth-input"
-              id="emailInput"
-              type="email"
-              autoComplete="email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="you@domain.com"
-              required
-            />
-
-            <label className="field-label password-label" htmlFor="passwordInput">Password</label>
-            <div className="password-wrap">
-              <input
-                className="auth-input"
-                id="passwordInput"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
-                minLength={6}
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Password"
-                required
-              />
-              <button
-                className="password-toggle"
-                type="button"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                <svg className="eye-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M2.2 12s3.4-6.2 9.8-6.2S21.8 12 21.8 12 18.4 18.2 12 18.2 2.2 12 2.2 12Z"/>
-                  <circle cx="12" cy="12" r="2.8"/>
-                </svg>
-              </button>
-            </div>
-
-            {authError && <p className="form-error" role="alert">{authError}</p>}
-
-            <button className="primary auth-submit" type="submit" style={{ marginTop: 14 }}>
-              {authMode === 'register' ? 'Create my account' : 'Sign in'}
+          {googleError && <p className="form-error google-error" role="alert">{googleError}</p>}
+          {showRedirectOption && (
+            <button className="secondary redirect-button" type="button" onClick={handleGoogleRedirect} disabled={googleLoading}>
+              Continue with redirect
             </button>
-          </form>
-
-          {/* Instant 1-click Demo */}
-          <button
-            className="secondary"
-            type="button"
-            onClick={handleDemoLogin}
-            style={{ width: '100%', marginTop: 10, fontSize: 13 }}
-          >
-            ⚡ Instant Demo Account (Test App Now)
-          </button>
-
-          <button
-            className="auth-switch"
-            type="button"
-            onClick={() => {
-              setAuthMode(authMode === 'login' ? 'register' : 'login');
-              setAuthError('');
-            }}
-          >
-            {authMode === 'register' ? 'Already have an account? Sign in' : 'New here? Create an account'}
-          </button>
-
-          <p className="login-note">Secured with Firebase Authentication. Messages are encrypted on-device.</p>
+          )}
+          <p className="login-note">Secured with Google and Firebase Authentication. Messages are encrypted on-device.</p>
         </main>
 
         {/* Claim Handle Modal */}

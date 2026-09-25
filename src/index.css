@@ -1,1 +1,18 @@
 @import "tailwindcss";
+
+.google-error {
+	margin: 14px 0 0;
+	padding: 12px 14px;
+	border: 1px solid #ed927c55;
+	border-radius: 10px;
+	background: #ed927c12;
+	color: #ffc0b2;
+	font-size: 12px;
+	line-height: 1.55;
+	overflow-wrap: anywhere;
+}
+
+.redirect-button {
+	width: 100%;
+	margin-top: 9px;
+}
