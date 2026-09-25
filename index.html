@@ -2,1142 +2,210 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#272757">
-  <title>DuoChat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1217">
+  <title>DuoChat | A space for two</title>
+  <meta name="description" content="A space for two — private, end-to-end encrypted real-time chat between two people." />
+  <meta property="og:title" content="DuoChat | A space for two" />
+  <meta property="og:description" content="A space for two — private, end-to-end encrypted real-time chat between two people." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      color-scheme: light;
-      --c-darkest: #0F0E47;
-      --c-primary: #272757;
-      --c-secondary: #505081;
-      --c-muted: #8686AC;
-      --green: var(--c-primary);
-      --green-dark: var(--c-darkest);
-      --green-bright: var(--c-secondary);
-      --ink: var(--c-darkest);
-      --muted: #6d6d94;
-      --line: #dedcf0;
-      --paper: #f6f6fb;
-      --wall: #eae9f6;
-      --white: #fff;
-      --danger: #b73e3e;
-      font-family: "DM Sans", sans-serif;
-    }
-
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html { -webkit-text-size-adjust: 100%; }
-    body { margin: 0; min-width: 0; height: 100vh; height: 100dvh; color: var(--ink); background: #d6d6ea; overscroll-behavior-y: contain; }
-    button, input, textarea { font: inherit; font-size: 16px; }
-    button { cursor: pointer; touch-action: manipulation; }
-    button:disabled { cursor: not-allowed; opacity: .55; }
-    button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--c-muted); outline-offset: 2px; }
-    [hidden] { display: none !important; }
-
-    .auth-screen {
-      min-height: 100%; display: grid; place-items: center; padding: 28px 18px;
-      padding-top: calc(28px + env(safe-area-inset-top, 0px)); padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
-      background: linear-gradient(180deg, var(--c-primary) 0 29%, #ecebf7 29% 100%);
-    }
-    .auth-wrap { width: min(100%, 440px); }
-    .brand { display: flex; align-items: center; gap: 12px; color: var(--white); margin: 0 0 22px 4px; }
-    .brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; background: #d3d3f0; color: var(--green-dark); font: 800 19px "Manrope", sans-serif; }
-    .brand-name { font: 800 21px "Manrope", sans-serif; }
-    .auth-panel { background: var(--white); padding: 34px; border-radius: 8px; box-shadow: 0 16px 48px #153b3020; }
-    .auth-panel h1 { margin: 0 0 8px; font: 800 26px "Manrope", sans-serif; }
-    .auth-panel > p { margin: 0 0 26px; color: var(--muted); line-height: 1.55; }
-    .field { display: grid; gap: 8px; margin: 18px 0; }
-    .field label { font-size: 13px; font-weight: 700; }
-    .field input { width: 100%; min-height: 46px; padding: 0 13px; border: 1px solid #d7e0db; border-radius: 5px; background: #fbfcfa; color: var(--ink); }
-    .field input:focus { border-color: var(--green); outline: 2px solid #b9e9d8; }
-    .field-hint { color: var(--muted); font-size: 12px; }
-    .primary, .secondary, .quiet, .icon-button {
-      min-height: 42px; border: 0; border-radius: 5px; font-weight: 700; transition: background .16s ease, transform .16s ease;
-    }
-    .primary { padding: 0 18px; color: var(--white); background: var(--green); }
-    .primary:hover:not(:disabled) { background: var(--green-dark); }
-    .primary:active, .secondary:active { transform: translateY(1px); }
-    .auth-submit { width: 100%; margin-top: 8px; }
-    .auth-switch { width: 100%; margin-top: 15px; border: 0; background: transparent; color: var(--green-dark); font-weight: 700; padding: 10px; }
-    .form-error { min-height: 18px; margin: 8px 0 0; color: var(--danger); font-size: 13px; }
-    .auth-foot { margin: 18px 6px 0; color: #566761; text-align: center; font-size: 12px; }
-
-    .messenger { width: min(100%, 1440px); height: min(100%, 900px); min-height: 420px; margin: auto; display: grid; grid-template-columns: 350px minmax(0, 1fr); overflow: hidden; background: var(--white); box-shadow: 0 18px 70px #142f2726; }
-    .sidebar { min-width: 0; display: flex; flex-direction: column; background: var(--white); border-right: 1px solid var(--line); }
-    .sidebar-top { height: 66px; flex: 0 0 66px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; padding-top: env(safe-area-inset-top, 0px); height: calc(66px + env(safe-area-inset-top, 0px)); flex-basis: calc(66px + env(safe-area-inset-top, 0px)); background: #f2f2fa; border-bottom: 1px solid var(--line); }
-    .account { display: flex; min-width: 0; align-items: center; gap: 10px; }
-    .account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-    .avatar { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; border-radius: 50%; background: #d3d3f0; color: var(--green-dark); font: 800 14px "Manrope", sans-serif; }
-    .side-actions { display: flex; gap: 7px; }
-    .icon-button { min-width: 44px; min-height: 44px; padding: 0 11px; background: transparent; color: var(--c-secondary); }
-    .icon-button:hover { background: #e9e9f6; }
-    .sidebar-heading { display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 11px; }
-    .sidebar-heading h1 { margin: 0; font: 800 22px "Manrope", sans-serif; }
-    .secondary { padding: 0 13px; background: #e6e6f5; color: var(--c-primary); }
-    .secondary:hover:not(:disabled) { background: #d7d7ef; }
-    .sidebar-tools { display: flex; gap: 8px; padding: 0 14px 14px; }
-    .search { width: 100%; height: 44px; padding: 0 13px; border: 0; border-radius: 5px; background: #f0f0f8; color: var(--ink); }
-    .chat-list { overflow-y: auto; flex: 1; min-height: 0; border-top: 1px solid var(--line); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-    .chat-row { width: 100%; min-height: 76px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 0; border-bottom: 1px solid #eeedf7; background: var(--white); text-align: left; }
-    .chat-row:hover { background: #f7f7fb; }
-    .chat-row.selected { background: #ebeaf8; }
-    .chat-row-copy { min-width: 0; flex: 1; }
-    .chat-row-name { display: block; overflow: hidden; margin-bottom: 5px; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-    .chat-row-preview { display: block; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-    .list-empty { padding: 28px 22px; color: var(--muted); text-align: center; font-size: 13px; line-height: 1.6; }
-
-    .conversation { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background-color: var(--wall); background-image: radial-gradient(#50508120 1px, transparent 1px), radial-gradient(#50508112 1px, transparent 1px); background-size: 22px 22px, 31px 31px; background-position: 0 0, 12px 15px; }
-    .conversation-empty { display: grid; flex: 1; min-height: 0; place-items: center; padding: 32px; text-align: center; overflow-y: auto; }
-    .empty-content { max-width: 360px; }
-    .empty-mark { width: 74px; height: 74px; display: grid; place-items: center; margin: 0 auto 18px; border: 1px solid #c9c9e6; border-radius: 50%; color: var(--green); background: #f7f7fc; font: 800 23px "Manrope", sans-serif; }
-    .conversation-empty h2 { margin: 0 0 9px; font: 800 23px "Manrope", sans-serif; }
-    .conversation-empty p { margin: 0; color: #62628c; line-height: 1.6; }
-    .chat-header { height: 66px; flex: 0 0 66px; display: flex; align-items: center; gap: 11px; padding: 0 18px; padding-top: env(safe-area-inset-top, 0px); height: calc(66px + env(safe-area-inset-top, 0px)); flex-basis: calc(66px + env(safe-area-inset-top, 0px)); background: #f2f2fa; border-bottom: 1px solid #dedcf0; position: sticky; top: 0; z-index: 1; }
-    .chat-heading { min-width: 0; flex: 1; }
-    .chat-heading strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-status { margin-top: 3px; color: var(--muted); font-size: 12px; }
-    .chat-status.connected { color: var(--green); }
-    .chat-status.typing { color: #cf6d42; animation: typing-breathe .8s ease-in-out infinite alternate; }
-    .delete-chat-button { color: #9e4640; }
-    .delete-chat-button:hover { background: #f8e7e4; }
-    .back-button { display: none; }
-    .message-log { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; padding: 22px clamp(14px, 5vw, 72px); scroll-behavior: smooth; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-    .message { max-width: min(76%, 640px); padding: 9px 11px 7px; border-radius: 6px; background: var(--white); box-shadow: 0 1px 1px #23234012; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.45; animation: message-in .18s ease-out both; }
-    .message.mine { align-self: flex-end; background: #dcdcf3; }
-    .message-meta { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; color: #73738f; font-size: 10px; }
-    .system-note { align-self: center; max-width: 90%; padding: 7px 11px; border-radius: 5px; background: #fff9d9; color: #67675f; text-align: center; font-size: 12px; }
-    .composer { display: flex; align-items: flex-end; gap: 10px; padding: 13px clamp(12px, 3vw, 34px); padding-bottom: calc(13px + env(safe-area-inset-bottom, 0px)); background: #f2f2fa; }
-    .composer textarea { min-height: 44px; max-height: 130px; flex: 1; resize: none; padding: 12px 14px; border: 1px solid #dcdcf0; border-radius: 6px; background: var(--white); color: var(--ink); }
-    .send-button { min-width: 72px; height: 44px; }
-    .key-warning { padding: 14px 18px; color: #795b15; background: #fff3c9; text-align: center; font-size: 13px; }
-
-    dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 0; border: 0; border-radius: 8px; color: var(--ink); box-shadow: 0 22px 80px #0f0e4745; }
-    dialog::backdrop { background: #0f0e47a8; }
-    .dialog-inner { padding: 25px; }
-    .dialog-inner h2 { margin: 0 0 8px; font: 800 21px "Manrope", sans-serif; }
-    .dialog-inner p { color: var(--muted); font-size: 14px; line-height: 1.5; }
-    .invite-number { margin: 18px 0; padding: 14px; border-radius: 5px; background: #eeedf9; color: var(--green-dark); text-align: center; font: 800 25px "Manrope", sans-serif; letter-spacing: 2px; }
-    .invite-expiry { margin: -8px 0 15px; text-align: center; font-size: 12px !important; }
-    .dialog-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
-    .dialog-actions .primary, .dialog-actions .secondary { flex: 1; min-height: 46px; }
-    .dialog-close { float: right; }
-    .invite-waiting { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 12px; border-radius: 5px; background: #eff6f1; color: #355b4b; font-size: 13px; line-height: 1.45; }
-    .waiting-dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--green-bright); box-shadow: 0 0 0 0 #16a98266; animation: waiting-pulse 1.7s infinite; }
-    .quiet { padding: 0 10px; background: transparent; color: var(--muted); }
-    .quiet:hover { background: #f1f2ee; color: var(--danger); }
-    .cancel-invite { display: block; margin: 8px auto 0; }
-    .emoji-suggestions { position: absolute; z-index: 3; left: clamp(12px, 3vw, 34px); bottom: 76px; width: min(310px, calc(100% - 24px)); max-height: 260px; overflow-y: auto; padding: 6px; border: 1px solid #dce5df; border-radius: 7px; background: #fff; box-shadow: 0 8px 24px #142f2728; animation: tray-in .16s ease-out both; }
-    .emoji-suggestions[hidden] { display: none; }
-    .emoji-option { width: 100%; min-height: 42px; display: flex; align-items: center; gap: 11px; padding: 5px 9px; border: 0; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; }
-    .emoji-option:hover, .emoji-option.active { background: #eff5f0; }
-    .emoji-glyph { width: 28px; font-size: 21px; text-align: center; }
-    .emoji-name { flex: 1; font-size: 13px; }
-    .emoji-shortcode { color: var(--muted); font-size: 11px; }
-    .emoji-empty { padding: 12px; color: var(--muted); font-size: 13px; }
-    .danger-button { min-height: 46px; flex: 1; padding: 0 13px; border: 0; border-radius: 5px; background: #a53c37; color: #fff; font-weight: 700; }
-    .danger-button:hover { background: #842e2a; }
-    .code-input { letter-spacing: 2px; font-variant-numeric: tabular-nums; }
-    .toast { position: fixed; z-index: 5; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 15px; border-radius: 5px; background: var(--c-darkest); color: var(--white); box-shadow: 0 6px 24px #0003; font-size: 13px; text-align: center; }
-
-    @keyframes message-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes waiting-pulse { 70% { box-shadow: 0 0 0 8px #16a98200; } 100% { box-shadow: 0 0 0 0 #16a98200; } }
-    @keyframes typing-breathe { to { opacity: .55; } }
-    @keyframes tray-in { from { opacity: 0; transform: translateY(5px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-    @media (min-width: 1441px) { .messenger { border-radius: 7px; } }
-    @media (max-width: 760px) {
-      html, body { height: 100%; height: 100dvh; overflow: hidden; }
-      body { background: var(--white); }
-      .messenger { width: 100%; height: 100%; grid-template-columns: 1fr; box-shadow: none; }
-      .sidebar, .conversation { grid-column: 1; grid-row: 1; }
-      .sidebar { padding-bottom: env(safe-area-inset-bottom, 0px); }
-      .conversation { display: none; }
-      .messenger.conversation-open .sidebar { display: none; }
-      .messenger.conversation-open .conversation { display: flex; }
-      .back-button { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; padding: 0; }
-      .chat-header { padding: 0 8px 0 4px; gap: 6px; }
-      .avatar { width: 36px; height: 36px; flex-basis: 36px; }
-      .message-log { padding: 14px 10px; gap: 6px; }
-      .message { max-width: 90%; }
-      .composer { padding: 8px 10px; gap: 8px; }
-      .composer textarea { min-height: 42px; padding: 10px 12px; }
-      .emoji-suggestions { left: 8px; bottom: 66px; width: min(310px, calc(100% - 16px)); }
-      .send-button { min-width: 52px; padding: 0 10px; }
-      dialog { align-self: flex-end; margin-bottom: env(safe-area-inset-bottom, 0px); }
-    }
-    @media (max-width: 420px) {
-      .auth-panel { padding: 26px 21px; }
-      .sidebar-heading { padding-top: 14px; }
-      .sidebar-tools { flex-direction: column; }
-      .sidebar-tools button { width: 100%; }
-      .dialog-actions { flex-direction: column; }
-      .dialog-actions .primary, .dialog-actions .secondary { flex: none; width: 100%; }
-    }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; } }
-  </style>
-<base target="_blank">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <section class="auth-screen" id="authScreen">
-    <div class="auth-wrap">
-      <div class="brand"><div class="brand-mark">D</div><span class="brand-name">DuoChat</span></div>
-      <div class="auth-panel">
-        <h1 id="authTitle">Welcome back</h1>
-        <p id="authDescription">Sign in to continue your private conversations.</p>
-        <form id="authForm">
-          <div class="field">
-            <label for="usernameInput">Username</label>
-            <input id="usernameInput" name="username" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" required>
-            <span class="field-hint">3-24 letters, numbers, or underscores</span>
-          </div>
-          <div class="field">
-            <label for="passwordInput">Password</label>
-            <input id="passwordInput" name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required>
-            <span class="field-hint" id="passwordHint" hidden>Use at least 10 characters.</span>
-          </div>
-          <p class="form-error" id="authError" role="alert"></p>
-          <button class="primary auth-submit" id="authSubmit" type="submit">Sign in</button>
-        </form>
-        <button class="auth-switch" id="authSwitch" type="button">Create a new account</button>
+  <section class="signin-screen" id="signinScreen">
+    <main class="login-card">
+      <a class="brand" href="#" aria-label="DuoChat home">
+        <span class="brand-mark" aria-hidden="true">✳</span><span>duochat<span class="brand-dot">.</span></span>
+      </a>
+      <p class="eyebrow">YOUR PRIVATE CORNER</p>
+      <h1 id="authTitle">Good conversations<br>start here.</h1>
+      <p class="auth-description" id="authDescription">Sign in to get back to your space. Just you, your person, and the conversation.</p>
+
+      <!-- Google Sign In Button -->
+      <button class="google-auth-button" id="googleAuthButton" type="button">
+        <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>Continue with Google</span>
+      </button>
+
+      <div class="auth-divider">
+        <span>or use email</span>
       </div>
-      <p class="auth-foot">Private chats are encrypted on your device.</p>
-    </div>
+
+      <form id="authForm" novalidate>
+        <div id="usernameGroup" hidden>
+          <label class="field-label" for="usernameInput">Username Handle</label>
+          <input class="auth-input" id="usernameInput" name="username" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" placeholder="yourname">
+          <p class="field-hint">3-24 letters, numbers, or underscores (for your chat identity)</p>
+        </div>
+
+        <label class="field-label" for="emailInput">Email</label>
+        <input class="auth-input" id="emailInput" name="email" type="email" autocomplete="email" placeholder="you@domain.com" required>
+
+        <label class="field-label password-label" for="passwordInput">Password</label>
+        <div class="password-wrap">
+          <input class="auth-input" id="passwordInput" name="password" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="Password" required>
+          <button class="password-toggle" id="passwordToggle" type="button" aria-label="Show password" aria-pressed="false" title="Show password">
+            <svg class="eye-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.2 12s3.4-6.2 9.8-6.2S21.8 12 21.8 12 18.4 18.2 12 18.2 2.2 12 2.2 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+          </button>
+        </div>
+        <p class="field-hint" id="passwordHint" hidden>Use at least 6 characters.</p>
+
+        <p class="form-error" id="authError" role="alert" aria-live="polite"></p>
+
+        <button class="primary auth-submit" id="authSubmit" type="submit">Sign in</button>
+      </form>
+
+      <button class="auth-switch" id="authSwitch" type="button">Create a new account</button>
+      <p class="login-note">Secured with Firebase Authentication. Messages are encrypted on-device.</p>
+    </main>
   </section>
 
-  <main class="messenger" id="messenger" hidden>
-    <aside class="sidebar" aria-label="Chats">
+  <!-- Complete Profile / Handle Prompt if logging in via Google without username -->
+  <dialog class="modal" id="handleModal">
+    <form class="modal-content" id="handleForm">
+      <p class="section-label">ONE LAST STEP</p>
+      <h2>Choose your DuoChat handle</h2>
+      <p class="modal-copy">Pick a unique username so your person knows who invited them.</p>
+      <label class="field-label" for="handleModalInput">Username</label>
+      <input class="auth-input code-input" id="handleModalInput" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" placeholder="yourname" required>
+      <p class="field-hint">3-24 letters, numbers, or underscores</p>
+      <p class="form-error" id="handleError" role="alert"></p>
+      <div class="modal-actions">
+        <button class="primary" id="handleModalSubmit" type="submit">Continue to DuoChat</button>
+      </div>
+    </form>
+  </dialog>
+
+  <main class="chat-app" id="chatApp" hidden>
+    <aside class="sidebar" aria-label="Conversations">
       <header class="sidebar-top">
-        <div class="account"><div class="avatar" id="accountAvatar">D</div><span class="account-name" id="accountName"></span></div>
-        <div class="side-actions"><button class="icon-button" id="logoutButton" type="button" title="Sign out">Sign out</button></div>
+        <a class="brand" href="#" aria-label="DuoChat home"><span class="brand-mark" aria-hidden="true">✳</span><span>duochat<span class="brand-dot">.</span></span></a>
+        <button class="text-button signout-button" id="signoutButton" type="button">Sign out</button>
       </header>
-      <div class="sidebar-heading"><h1>Chats</h1></div>
-      <div class="sidebar-tools">
-        <button class="primary" id="newChatButton" type="button">+ Start a chat</button>
-        <button class="secondary" id="joinChatButton" type="button">Join with number</button>
+
+      <div class="inbox-header">
+        <div class="sidebar-heading">
+          <div><p class="section-label">DIRECT MESSAGES</p><h1>Inbox</h1></div>
+          <button class="compose-btn" id="newChatButton" type="button" aria-label="New Message" title="New Message">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+        </div>
       </div>
-      <div class="sidebar-tools" style="padding-top:0">
-        <input class="search" id="chatSearch" type="search" placeholder="Search chats" aria-label="Search chats">
+
+      <nav class="inbox-tabs" role="tablist" aria-label="Inbox categories">
+        <button class="inbox-tab active" id="tabMessages" type="button" role="tab" aria-selected="true">
+          <span>Messages</span>
+          <span class="tab-count" id="chatCount">0</span>
+        </button>
+        <button class="inbox-tab" id="tabRequests" type="button" role="tab" aria-selected="false">
+          <span>Requests</span>
+          <span class="requests-badge" id="requestsBadge" hidden>0</span>
+        </button>
+      </nav>
+
+      <label class="search-wrap"><span class="sr-only">Search conversations</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="chatSearch" type="search" placeholder="Search people or chats"></label>
+
+      <div class="inbox-pane active" id="messagesPane">
+        <div class="chat-list" id="chatList" aria-live="polite"></div>
       </div>
-      <div class="chat-list" id="chatList" aria-live="polite"></div>
+
+      <div class="inbox-pane" id="requestsPane" hidden>
+        <div class="requests-list" id="requestsList" aria-live="polite"></div>
+      </div>
+
+      <footer class="sidebar-foot">
+        <div>SIGNED IN AS <strong id="whoami"></strong></div>
+        <div class="auth-pill-row">
+          <span class="user-email-tag" id="userEmailTag"></span>
+          <span class="secure-label"><i></i> Firebase Secured</span>
+        </div>
+      </footer>
     </aside>
 
     <section class="conversation" aria-label="Conversation">
-      <div class="conversation-empty" id="emptyState">
+      <div class="empty-state" id="emptyState">
         <div class="empty-content">
-          <div class="empty-mark">D</div>
-          <h2>Your chats, together</h2>
-          <p>Start an invite, then wait for the other person to say yes. The room does not exist until they accept. Very exclusive. Two seats.</p>
+          <div class="empty-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+          <p class="eyebrow">YOUR DIRECT MESSAGES</p>
+          <h2>Your messages.<br>No audience.</h2>
+          <p>Send private, end-to-end encrypted direct messages to anyone on DuoChat.</p>
+          <div class="empty-actions"><button class="primary" id="emptyStartButton" type="button">Send a message</button></div>
+          <span class="empty-note">Two people. Direct message requests. End-to-end encrypted.</span>
         </div>
       </div>
-      <div id="activeChat" hidden style="display:flex; flex:1; min-height:0; flex-direction:column">
+
+      <section class="active-chat" id="activeChat" hidden aria-label="Active conversation">
         <header class="chat-header">
-          <button class="icon-button back-button" id="backButton" type="button" title="Back to chats">&lt;</button>
-          <div class="avatar" id="chatAvatar">D</div>
-          <div class="chat-heading"><strong id="chatName">Chat</strong><div class="chat-status" id="chatStatus">Connecting</div></div>
-          <button class="icon-button" id="shareChatButton" type="button" title="Share an invite">Invite</button>
-          <button class="icon-button delete-chat-button" id="deleteChatButton" type="button" title="Delete this chat for both people">Delete</button>
+          <button class="back-button" id="backButton" type="button" aria-label="Back to conversations" title="Back to conversations">←</button>
+          <div class="avatar" id="chatAvatar">?</div>
+          <div class="chat-heading"><strong id="chatName">Your space</strong><span class="chat-status" id="chatStatus">Connecting</span></div>
+          <button class="text-button delete-button" id="deleteChatButton" type="button">Delete</button>
         </header>
-        <div class="key-warning" id="keyWarning" hidden>This device does not have this chat's encryption key. Re-open the secure invite link on this device.</div>
-        <div class="message-log" id="messageLog" aria-live="polite" aria-label="Messages"></div>
+
+        <div class="key-warning" id="keyWarning" hidden>This device is missing the encryption key for this conversation.</div>
+
+        <div class="message-list" id="messages" role="log" aria-label="Messages" aria-live="polite"></div>
+
         <form class="composer" id="messageForm">
-          <textarea id="messageInput" rows="1" maxlength="2000" placeholder="Write a message" aria-label="Message" required></textarea>
-          <button class="primary send-button" id="sendButton" type="submit">Send</button>
+          <textarea id="msgInput" rows="1" maxlength="2000" aria-label="Message" placeholder="Write a message..." required></textarea>
+          <button class="primary send-button" id="sendBtn" type="submit" aria-label="Send message">Send <span aria-hidden="true">↗</span></button>
         </form>
-      </div>
+      </section>
     </section>
   </main>
 
-  <dialog id="inviteDialog">
-    <div class="dialog-inner">
-      <button class="icon-button dialog-close" data-close="inviteDialog" type="button" title="Close">Close</button>
-      <h2>Invite someone</h2>
-      <p>This number admits one other account, works once, and expires in 30 minutes. Share the secure link so the other person also receives the encryption key.</p>
-      <div class="invite-number" id="inviteNumber"></div>
-      <p class="invite-expiry" id="inviteExpiry"></p>
-      <input class="search" id="inviteLink" aria-label="Secure invite link" readonly>
-      <div class="dialog-actions">
-        <button class="secondary" id="copyNumberButton" type="button">Copy number</button>
-        <button class="primary" id="copyLinkButton" type="button">Copy secure link</button>
+  <!-- Instagram Style New Direct Message Dialog -->
+  <dialog class="modal" id="newChatModal">
+    <div class="modal-content">
+      <button class="modal-close" type="button" data-close="newChatModal" aria-label="Close">×</button>
+      <p class="section-label">DIRECT MESSAGE</p>
+      <h2>New message</h2>
+      <p class="modal-copy">Search people on DuoChat to start a private conversation.</p>
+      
+      <div class="user-search-wrap">
+        <span class="search-prefix">To:</span>
+        <input class="auth-input user-search-input" id="userSearchInput" placeholder="Search by @handle..." autocomplete="off">
       </div>
-      <div class="invite-waiting" id="inviteWaiting" hidden aria-live="polite">
-        <span class="waiting-dot" aria-hidden="true"></span>
-        <span id="inviteWaitingText">Invite sent. Your chat is practicing its hello.</span>
+
+      <div class="suggested-header">
+        <span>Registered Users</span>
+        <button class="text-button refresh-users-btn" id="refreshUsersBtn" type="button">Refresh</button>
       </div>
-      <button class="quiet cancel-invite" id="cancelInviteButton" type="button" hidden>Cancel invite</button>
-      <p class="form-error" id="inviteError" role="status"></p>
+
+      <div class="suggested-users-list" id="suggestedUsersList" role="list">
+        <div class="list-empty">Loading users...</div>
+      </div>
+      <p class="form-error" id="newChatError" role="alert"></p>
     </div>
   </dialog>
 
-  <dialog id="deleteChatDialog">
-    <form class="dialog-inner" id="deleteChatForm">
-      <button class="icon-button dialog-close" data-close="deleteChatDialog" type="button" title="Close">Close</button>
-      <h2>End this chat?</h2>
-      <p>This deletes the conversation and its saved messages for both people. No dramatic goodbye required, but this is the point of no undo.</p>
-      <p class="form-error" id="deleteChatError" role="alert"></p>
-      <div class="dialog-actions">
-        <button class="secondary" data-close="deleteChatDialog" type="button">Keep chatting</button>
-        <button class="danger-button" id="confirmDeleteChat" type="submit">Delete for both</button>
-      </div>
+  <dialog class="modal" id="deleteDialog">
+    <form class="modal-content" id="deleteForm">
+      <button class="modal-close" type="button" data-close="deleteDialog" aria-label="Close">×</button>
+      <p class="section-label">A CLEAN BREAK</p><h2>Delete this chat?</h2>
+      <p class="modal-copy">This removes the conversation and its messages for both people. There is no undo button hiding nearby.</p>
+      <p class="form-error" id="deleteError" role="alert"></p>
+      <div class="modal-actions"><button class="secondary" type="button" data-close="deleteDialog">Keep it</button><button class="danger-button" id="confirmDelete" type="submit">Delete for both</button></div>
     </form>
   </dialog>
 
-  <div class="emoji-suggestions" id="emojiSuggestions" role="listbox" aria-label="Emoji suggestions" hidden>
-  </div>
-
-  <dialog id="joinDialog">
-    <form class="dialog-inner" id="joinForm">
-      <button class="icon-button dialog-close" data-close="joinDialog" type="button" title="Close">Close</button>
-      <h2>Accept an invite</h2>
-      <p>Enter the 12-digit number and encryption key. The private room is created when you accept.</p>
-      <div class="field">
-        <label for="inviteCodeInput">Invite number</label>
-        <input class="code-input" id="inviteCodeInput" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{12}" maxlength="12" placeholder="000000000000" required>
-      </div>
-      <div class="field">
-        <label for="chatKeyInput">Encryption key</label>
-        <input id="chatKeyInput" autocomplete="off" spellcheck="false" placeholder="Paste the key from the secure link" required>
-      </div>
-      <p class="form-error" id="joinError" role="alert"></p>
-      <div class="dialog-actions">
-        <button class="secondary" data-close="joinDialog" type="button">Cancel</button>
-        <button class="primary" id="joinSubmit" type="submit">Accept invite</button>
-      </div>
-    </form>
-  </dialog>
-  <div class="toast" id="toast" role="status" hidden></div>
-
-  <script>
-    const WORKER_URL = "wss://duochat-worker.dwagszone.workers.dev/ws";
-    const API_BASE = WORKER_URL.replace(/^wss:/, "https:").replace(/\/ws$/, "");
-    const STORAGE_TOKEN = "duochat:session";
-    const STORAGE_KEY_PREFIX = "duochat:key:";
-    const STORAGE_USED_INVITES = "duochat:used-invites";
-    const STORAGE_PENDING_INVITE = "duochat:pending-invite";
-    const PENDING_CHAT_LABEL = "New chat"; // shown until the other member's name arrives
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    const emojiCatalog = [
-      ["😀", "grinning", "smile happy face"], ["😃", "smiley", "happy face"], ["😂", "joy", "laugh cry"],
-      ["🤣", "rofl", "laugh rolling"], ["😊", "blush", "smile happy"], ["😍", "heart_eyes", "love"],
-      ["🥰", "smiling_face_with_hearts", "love affection"], ["😘", "kissing_heart", "kiss love"], ["😎", "sunglasses", "cool"],
-      ["🤔", "thinking", "think question"], ["🙄", "roll_eyes", "eyeroll"], ["🥲", "smiling_face_with_tear", "happy sad"],
-      ["😭", "sob", "cry sad"], ["😡", "rage", "angry"], ["🤯", "exploding_head", "mind blown"],
-      ["👀", "eyes", "look see"], ["👍", "thumbsup", "yes good"], ["👎", "thumbsdown", "no bad"],
-      ["🙌", "raised_hands", "celebrate praise"], ["👏", "clap", "applause"], ["🙏", "pray", "please thanks"],
-      ["💀", "skull", "dead funny"], ["🔥", "fire", "hot lit"], ["✨", "sparkles", "magic shiny"],
-      ["❤️", "heart", "love red"], ["💔", "broken_heart", "sad heartbreak"], ["💯", "100", "perfect score"],
-      ["🎉", "tada", "party celebrate"], ["✅", "white_check_mark", "done yes"], ["🤝", "handshake", "deal"],
-      ["🫡", "saluting_face", "salute respect"], ["🤷", "shrug", "dunno"], ["🤦", "facepalm", "oops"],
-      ["🐈", "cat", "pet animal"], ["🐶", "dog", "pet animal"], ["🍕", "pizza", "food"],
-      ["🍿", "popcorn", "snack movie"], ["☕", "coffee", "tea drink"], ["🌮", "taco", "food"],
-      ["🚀", "rocket", "launch space"], ["🌈", "rainbow", "color"], ["💤", "zzz", "sleep tired"]
-    ].map(([emoji, shortcode, keywords]) => ({ emoji, shortcode, keywords }));
-
-    let token = sessionStorage.getItem(STORAGE_TOKEN);
-    let username = "";
-    let authMode = "login";
-    let chats = [];
-    let activeChatId = "";
-    let ws = null;
-    let reconnectTimer = 0;
-    let invitation = null;
-    let inviteCountdownTimer = 0;
-    let pendingInvitePollTimer = 0;
-    let pendingInvite = null;
-    let invitePollInFlight = false;
-    let typingTimer = 0;
-    let remoteTypingTimer = 0;
-    let lastTypingState = false;
-    let matchingEmojis = [];
-    let activeEmojiIndex = 0;
-    let emojiQueryStart = -1;
-    let toastTimer = 0;
-    let creatingChat = false;
-    const renderedMessages = new Set();
-
-    const byId = (id) => document.getElementById(id);
-
-    function toBase64Url(buffer) {
-      let binary = "";
-      for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
-      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-    }
-
-    function fromBase64Url(value) {
-      const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-      return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-    }
-
-    async function api(path, options = {}) {
-      const headers = new Headers(options.headers || {});
-      headers.set("Content-Type", "application/json");
-      if (token) headers.set("Authorization", `Bearer ${token}`);
-      let response;
-      try {
-        response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
-      } catch (error) {
-        if (error instanceof TypeError) {
-          throw new Error("Can't reach DuoChat's Worker. Its account API may not be deployed yet. Deploy the latest src/index.js with Wrangler, then retry.");
-        }
-        throw error;
-      }
-      const contentType = response.headers.get("Content-Type") || "";
-      if (!contentType.includes("application/json")) {
-        throw new Error("The DuoChat Worker is running an older version. Deploy the latest src/index.js with Wrangler, then retry.");
-      }
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "The request could not be completed.");
-      return result;
-    }
-
-    function setAuthMode(mode) {
-      authMode = mode;
-      const registering = mode === "register";
-      byId("authTitle").textContent = registering ? "Create your account" : "Welcome back";
-      byId("authDescription").textContent = registering ? "Choose a username and password to get started." : "Sign in to continue your private conversations.";
-      byId("authSubmit").textContent = registering ? "Create account" : "Sign in";
-      byId("authSwitch").textContent = registering ? "I already have an account" : "Create a new account";
-      byId("passwordInput").autocomplete = registering ? "new-password" : "current-password";
-      byId("passwordHint").hidden = !registering;
-      byId("authError").textContent = "";
-    }
-
-    async function loadApp() {
-      try {
-        const result = await api("/api/chats");
-        chats = dedupeChats(result.chats || []);
-        byId("authScreen").hidden = true;
-        byId("messenger").hidden = false;
-        byId("accountName").textContent = username;
-        byId("accountAvatar").textContent = username.slice(0, 1).toUpperCase();
-        renderChats();
-        await acceptPendingInvite();
-        if (!byId("joinDialog").open) await restorePendingInvite();
-      } catch (error) {
-        token = "";
-        sessionStorage.removeItem(STORAGE_TOKEN);
-        byId("messenger").hidden = true;
-        byId("authScreen").hidden = false;
-        byId("authError").textContent = error.message;
-      }
-    }
-
-    async function refreshChats() {
-      try {
-        const result = await api("/api/chats");
-        chats = dedupeChats(result.chats || []);
-        renderChats();
-        if (activeChatId) updateChatHeader(activeChatId);
-      } catch { }
-    }
-
-    async function acceptPendingInvite() {
-      const params = new URLSearchParams(location.search);
-      const fragments = new URLSearchParams(location.hash.slice(1));
-      const code = params.get("invite");
-      const key = fragments.get("key");
-      if (!code || !key) return;
-      byId("inviteCodeInput").value = code;
-      byId("chatKeyInput").value = key;
-      byId("joinError").textContent = "Your friend is waiting. This button is the actual yes.";
-      byId("joinDialog").showModal();
-    }
-
-    function usedInvites() {
-      try { return new Set(JSON.parse(localStorage.getItem(STORAGE_USED_INVITES) || "[]")); }
-      catch { return new Set(); }
-    }
-
-    function markInviteUsed(code) {
-      const set = usedInvites();
-      set.add(code);
-      localStorage.setItem(STORAGE_USED_INVITES, JSON.stringify([...set]));
-    }
-
-    // Best-effort server-side invalidation: if the Worker doesn't expose this
-    // endpoint yet, the error is swallowed and the local guard still applies.
-    async function invalidateInvite(code) {
-      try { await api(`/api/invites/${encodeURIComponent(code)}/invalidate`, { method: "POST", body: "{}" }); } catch { }
-    }
-
-    async function joinByInvite(code, keyText) {
-      code = (code || "").trim();
-      keyText = (keyText || "").trim();
-      if (!/^[0-9]{12}$/.test(code)) throw new Error("Enter the full 12-digit invite number.");
-      if (usedInvites().has(code)) throw new Error("This invite has already been used.");
-      await importChatKey(keyText);
-      const result = await api("/api/chats/join", { method: "POST", body: JSON.stringify({ code }) });
-      markInviteUsed(code);
-      invalidateInvite(code); // fire-and-forget
-      saveChatKey(result.chat.id, keyText);
-      // If we already have a chat with these exact members, drop the stale copy
-      // so inviting the same person again never produces duplicate chats.
-      const sig = memberSignature(result.chat);
-      chats = chats.filter((item) => item.id !== result.chat.id || memberSignature(item) !== sig);
-      chats = chats.filter((item) => item.id !== result.chat.id);
-      if (sig.split("|").length >= 2) {
-        chats = chats.filter((item) => memberSignature(item) !== sig);
-      }
-      chats.unshift(result.chat);
-      renderChats();
-      selectChat(result.chat.id);
-      history.replaceState(null, "", location.pathname);
-      showToast("You're in. The room is open; try not to send 47 messages at once.");
-      return result.chat;
-    }
-
-    async function restorePendingInvite() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_PENDING_INVITE) || "null");
-        if (!saved?.code || !saved?.keyText || saved.expiresAt <= Date.now()) {
-          localStorage.removeItem(STORAGE_PENDING_INVITE);
-          return;
-        }
-        pendingInvite = saved;
-        showInvitation(saved.code, saved.keyText, saved.expiresAt, null);
-        pollPendingInvite();
-        pendingInvitePollTimer = setInterval(pollPendingInvite, 2500);
-      } catch {
-        localStorage.removeItem(STORAGE_PENDING_INVITE);
-      }
-    }
-
-    async function pollPendingInvite() {
-      if (!pendingInvite || invitePollInFlight) return;
-      invitePollInFlight = true;
-      try {
-        const result = await api(`/api/invites/${encodeURIComponent(pendingInvite.code)}`);
-        if (result.status === "accepted") {
-          const accepted = pendingInvite;
-          clearInterval(pendingInvitePollTimer);
-          pendingInvite = null;
-          localStorage.removeItem(STORAGE_PENDING_INVITE);
-          saveChatKey(result.chat.id, accepted.keyText);
-          upsertChat(result.chat);
-          byId("inviteWaiting").hidden = false;
-          byId("inviteWaitingText").textContent = "They said yes. The room is open, the small talk is optional.";
-          byId("cancelInviteButton").hidden = true;
-          if (byId("inviteDialog").open) byId("inviteDialog").close();
-          selectChat(result.chat.id);
-          showToast("They accepted. Chat room: now officially a room.");
-        } else if (result.status === "expired" || result.status === "cancelled") {
-          clearInterval(pendingInvitePollTimer);
-          pendingInvite = null;
-          localStorage.removeItem(STORAGE_PENDING_INVITE);
-          byId("inviteWaiting").hidden = false;
-          byId("inviteWaitingText").textContent = result.status === "expired"
-            ? "Invite expired. Nobody was pulled into an unwanted conversation."
-            : "Invite canceled. The imaginary typing indicator has been dismissed.";
-          byId("cancelInviteButton").hidden = true;
-        }
-      } catch {
-        if (pendingInvite && byId("inviteDialog").open) {
-          byId("inviteWaitingText").textContent = "Still waiting. The internet is checking its calendar.";
-        }
-      } finally {
-        invitePollInFlight = false;
-      }
-    }
-
-    async function cancelPendingInvite() {
-      if (!pendingInvite) return;
-      try {
-        await api(`/api/invites/${encodeURIComponent(pendingInvite.code)}`, { method: "DELETE" });
-        clearInterval(pendingInvitePollTimer);
-        clearInterval(inviteCountdownTimer);
-        localStorage.removeItem(STORAGE_PENDING_INVITE);
-        pendingInvite = null;
-        byId("inviteDialog").close();
-        showToast("Invite canceled. Your dignity remains intact.");
-      } catch (error) {
-        byId("inviteError").textContent = error.message;
-      }
-    }
-
-    function memberSignature(chat) {
-      return [...(chat.members || [])].sort().join("|");
-    }
-
-    function dedupeChats(list) {
-      const seen = new Set();
-      const kept = [];
-      for (const chat of list) {
-        const sig = memberSignature(chat);
-        // Only collapse chats that actually have the same full member list;
-        // never merge two still-empty chats that may get different friends.
-        const mergeable = sig.split("|").length >= 2;
-        if (mergeable) {
-          if (seen.has(sig)) continue;
-          seen.add(sig);
-        }
-        kept.push(chat);
-      }
-      return kept;
-    }
-
-    function renderChats() {
-      const list = byId("chatList");
-      const query = byId("chatSearch").value.trim().toLowerCase();
-      const filtered = chats.filter((chat) => chat.members.filter((member) => member !== username).join(" ").toLowerCase().includes(query));
-      list.replaceChildren();
-      if (!filtered.length) {
-        const empty = document.createElement("div");
-        empty.className = "list-empty";
-        empty.textContent = query ? "No chats match that search." : "No chats yet. Start one and invite a friend.";
-        list.append(empty);
-        return;
-      }
-      for (const chat of filtered) {
-        const other = chat.members.find((member) => member !== username) || PENDING_CHAT_LABEL;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = `chat-row${chat.id === activeChatId ? " selected" : ""}`;
-        const avatar = document.createElement("span");
-        avatar.className = "avatar";
-        avatar.textContent = other === PENDING_CHAT_LABEL ? "?" : other.slice(0, 1).toUpperCase();
-        const copy = document.createElement("span");
-        copy.className = "chat-row-copy";
-        const name = document.createElement("span");
-        name.className = "chat-row-name";
-        name.textContent = other;
-        const preview = document.createElement("span");
-        preview.className = "chat-row-preview";
-        preview.textContent = other === PENDING_CHAT_LABEL ? "Invite pending — share the link" : "End-to-end encrypted";
-        copy.append(name, preview);
-        button.append(avatar, copy);
-        button.addEventListener("click", () => selectChat(chat.id));
-        list.append(button);
-      }
-    }
-
-    function upsertChat(chat) {
-      const sig = memberSignature(chat);
-      chats = chats.filter((item) => item.id !== chat.id);
-      if (sig.split("|").length >= 2) {
-        chats = chats.filter((item) => memberSignature(item) !== sig);
-      }
-      chats.unshift(chat);
-      renderChats();
-    }
-
-    function getChatKey(id) {
-      return localStorage.getItem(`${STORAGE_KEY_PREFIX}${id}`) || "";
-    }
-
-    function saveChatKey(id, key) {
-      localStorage.setItem(`${STORAGE_KEY_PREFIX}${id}`, key);
-    }
-
-    async function importChatKey(value) {
-      const bytes = fromBase64Url(value.trim());
-      if (bytes.length !== 32) throw new Error("That encryption key is not valid.");
-      return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
-    }
-
-    function updateChatHeader(id) {
-      const chat = chats.find((item) => item.id === id);
-      if (!chat) return;
-      const other = chat.members.find((member) => member !== username) || PENDING_CHAT_LABEL;
-      byId("chatName").textContent = other;
-      byId("chatAvatar").textContent = other === PENDING_CHAT_LABEL ? "?" : other.slice(0, 1).toUpperCase();
-      byId("shareChatButton").hidden = chat.members.length >= 2;
-      byId("deleteChatButton").hidden = chat.members.length < 2;
-    }
-
-    async function selectChat(id) {
-      if (id === activeChatId && ws && ws.readyState === WebSocket.OPEN) {
-        renderChats();
-        return;
-      }
-      activeChatId = id;
-      const chat = chats.find((item) => item.id === id);
-      if (!chat) return;
-      updateChatHeader(id);
-      byId("emptyState").hidden = true;
-      byId("activeChat").hidden = false;
-      byId("messenger").classList.add("conversation-open");
-      const log = byId("messageLog");
-      log.replaceChildren();
-      renderedMessages.clear();
-      log.scrollTop = 0;
-      const hasKey = Boolean(getChatKey(id));
-      byId("keyWarning").hidden = hasKey;
-      byId("messageInput").disabled = !hasKey;
-      byId("sendButton").disabled = !hasKey;
-      renderChats();
-      connectToChat(id);
-      // Pick up the other member's name if the server has it now.
-      refreshChats();
-    }
-
-    function setChatStatus(text, connected = false, typing = false) {
-      const status = byId("chatStatus");
-      status.textContent = text;
-      status.classList.toggle("connected", connected);
-      status.classList.toggle("typing", typing);
-    }
-
-    function sendTyping(active) {
-      if (!ws || ws.readyState !== WebSocket.OPEN || !activeChatId || lastTypingState === active) return;
-      lastTypingState = active;
-      ws.send(JSON.stringify({ type: "typing", active }));
-    }
-
-    function forgetDeletedChat(chatId) {
-      chats = chats.filter((chat) => chat.id !== chatId);
-      localStorage.removeItem(`${STORAGE_KEY_PREFIX}${chatId}`);
-      renderChats();
-      if (activeChatId !== chatId) return;
-      clearTimeout(reconnectTimer);
-      clearTimeout(typingTimer);
-      clearTimeout(remoteTypingTimer);
-      activeChatId = "";
-      lastTypingState = false;
-      const deletedSocket = ws;
-      ws = null;
-      if (deletedSocket && deletedSocket.readyState < WebSocket.CLOSING) deletedSocket.close();
-      byId("activeChat").hidden = true;
-      byId("emptyState").hidden = false;
-      byId("messenger").classList.remove("conversation-open");
-      byId("messageLog").replaceChildren();
-      hideEmojiSuggestions();
-      showToast("Chat deleted. Fresh start, zero awkward history.");
-    }
-
-    function hideEmojiSuggestions() {
-      byId("emojiSuggestions").hidden = true;
-      byId("messageInput").setAttribute("aria-expanded", "false");
-      byId("messageInput").removeAttribute("aria-activedescendant");
-      matchingEmojis = [];
-      activeEmojiIndex = 0;
-      emojiQueryStart = -1;
-    }
-
-    function renderEmojiSuggestions() {
-      const list = byId("emojiSuggestions");
-      list.replaceChildren();
-      if (!matchingEmojis.length) {
-        const empty = document.createElement("div");
-        empty.className = "emoji-empty";
-        empty.textContent = "No emoji found. The colon has standards.";
-        list.append(empty);
-        list.hidden = false;
-        byId("messageInput").setAttribute("aria-expanded", "true");
-        return;
-      }
-      matchingEmojis.slice(0, 8).forEach((item, index) => {
-        const option = document.createElement("button");
-        option.type = "button";
-        option.id = `emoji-option-${index}`;
-        option.className = `emoji-option${index === activeEmojiIndex ? " active" : ""}`;
-        option.setAttribute("role", "option");
-        option.setAttribute("aria-selected", String(index === activeEmojiIndex));
-        const glyph = document.createElement("span");
-        glyph.className = "emoji-glyph";
-        glyph.textContent = item.emoji;
-        const name = document.createElement("span");
-        name.className = "emoji-name";
-        name.textContent = item.shortcode.replaceAll("_", " ");
-        const shortcode = document.createElement("span");
-        shortcode.className = "emoji-shortcode";
-        shortcode.textContent = `:${item.shortcode}:`;
-        option.append(glyph, name, shortcode);
-        option.addEventListener("mousedown", (event) => event.preventDefault());
-        option.addEventListener("click", () => insertSelectedEmoji(index));
-        list.append(option);
-      });
-      list.hidden = false;
-      byId("messageInput").setAttribute("aria-expanded", "true");
-      byId("messageInput").setAttribute("aria-activedescendant", `emoji-option-${activeEmojiIndex}`);
-    }
-
-    function updateEmojiSuggestions() {
-      const field = byId("messageInput");
-      const caret = field.selectionStart ?? field.value.length;
-      const beforeCaret = field.value.slice(0, caret);
-      const match = beforeCaret.match(/:([a-z0-9_+-]*)$/i);
-      if (!match) {
-        hideEmojiSuggestions();
-        return;
-      }
-      emojiQueryStart = caret - match[0].length;
-      const query = match[1].toLowerCase();
-      matchingEmojis = emojiCatalog.filter((item) =>
-        item.shortcode.includes(query) || item.keywords.includes(query)
-      ).slice(0, 8);
-      activeEmojiIndex = Math.min(activeEmojiIndex, Math.max(0, matchingEmojis.length - 1));
-      renderEmojiSuggestions();
-    }
-
-    function insertSelectedEmoji(index = activeEmojiIndex) {
-      const selected = matchingEmojis[index];
-      const field = byId("messageInput");
-      if (!selected || emojiQueryStart < 0) return;
-      const caret = field.selectionStart ?? field.value.length;
-      field.setRangeText(`${selected.emoji} `, emojiQueryStart, caret, "end");
-      hideEmojiSuggestions();
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.focus();
-    }
-
-    async function deleteActiveChat() {
-      const chatId = activeChatId;
-      if (!chatId) return;
-      const button = byId("confirmDeleteChat");
-      button.disabled = true;
-      byId("deleteChatError").textContent = "";
-      try {
-        await api(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" });
-        byId("deleteChatDialog").close();
-        forgetDeletedChat(chatId);
-      } catch (error) {
-        byId("deleteChatError").textContent = error.message;
-      } finally {
-        button.disabled = false;
-      }
-    }
-
-    function connectToChat(id) {
-      clearTimeout(reconnectTimer);
-      if (ws) ws.close();
-      setChatStatus("Connecting");
-      let settled = false;
-      ws = new WebSocket(`${WORKER_URL}?chat=${encodeURIComponent(id)}`);
-      const activeSocket = ws;
-      activeSocket.addEventListener("open", () => activeSocket.send(JSON.stringify({ type: "auth", token })));
-      activeSocket.addEventListener("message", async (event) => {
-        if (activeSocket !== ws || id !== activeChatId) return;
-        let data;
-        try { data = JSON.parse(event.data); } catch { return; }
-        if (data.type === "ready") {
-          settled = true;
-          setChatStatus(getChatKey(id) ? "End-to-end encrypted" : "Encryption key missing", Boolean(getChatKey(id)));
-          for (const message of data.messages || []) await addMessage(message, id);
-          scrollLogToBottom();
-        } else if (data.type === "chat_updated") {
-          upsertChat(data.chat);
-          updateChatHeader(id);
-        } else if (data.type === "typing") {
-          clearTimeout(remoteTypingTimer);
-          if (data.active) {
-            setChatStatus(`${data.sender} is typing…`, false, true);
-            remoteTypingTimer = setTimeout(() => setChatStatus("End-to-end encrypted", Boolean(getChatKey(id))), 1500);
-          } else {
-            setChatStatus("End-to-end encrypted", Boolean(getChatKey(id)));
-          }
-        } else if (data.type === "chat_deleted") {
-          forgetDeletedChat(data.chatId);
-        } else if (data.type === "chat") {
-          await addMessage(data.message, id);
-        } else if (data.type === "error") {
-          settled = true;
-          setChatStatus(data.error || "Connection rejected");
-        }
-      });
-      activeSocket.addEventListener("close", () => {
-        if (activeSocket === ws && id === activeChatId) {
-          if (!settled) {
-            setChatStatus("Disconnected");
-          } else {
-            setChatStatus("Reconnecting…");
-            reconnectTimer = setTimeout(() => { if (activeChatId === id) connectToChat(id); }, 2000);
-          }
-        }
-      });
-      activeSocket.addEventListener("error", () => {
-        if (activeSocket === ws && id === activeChatId) setChatStatus("Connection error");
-      });
-    }
-
-    function scrollLogToBottom() {
-      const log = byId("messageLog");
-      // .message-log uses flex-direction: column-reverse, so scrollTop 0 is
-      // the visual bottom — the chat renders newest-first with no top-to-bottom flicker.
-      log.scrollTop = 0;
-    }
-
-    async function encryptText(key, text) {
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(text));
-      return JSON.stringify({ iv: toBase64Url(iv), ct: toBase64Url(ciphertext) });
-    }
-
-    async function decryptText(key, payload) {
-      const encrypted = JSON.parse(payload);
-      const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64Url(encrypted.iv) }, key, fromBase64Url(encrypted.ct));
-      return decoder.decode(plaintext);
-    }
-
-    async function addMessage(message, chatId) {
-      if (chatId !== activeChatId) return;
-      // Guard against duplicates when history replay and live events overlap.
-      const messageKey = message.id || `${message.ts}:${message.sender}`;
-      if (renderedMessages.has(messageKey)) return;
-      renderedMessages.add(messageKey);
-      const keyText = getChatKey(chatId);
-      let text;
-      try {
-        if (!keyText) throw new Error("missing-key");
-        text = await decryptText(await importChatKey(keyText), message.text);
-      } catch {
-        text = keyText ? "Message could not be decrypted." : "Encryption key missing on this device.";
-      }
-      const bubble = document.createElement("div");
-      bubble.className = `message${message.sender === username ? " mine" : ""}`;
-      const content = document.createElement("div");
-      content.textContent = text;
-      const meta = document.createElement("div");
-      meta.className = "message-meta";
-      const sender = document.createElement("span");
-      sender.textContent = message.sender;
-      const time = document.createElement("time");
-      time.dateTime = new Date(message.ts).toISOString();
-      time.textContent = new Date(message.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      meta.append(sender, time);
-      bubble.append(content, meta);
-      const log = byId("messageLog");
-      // The log is flex-direction: column-reverse, so the DOM's first child
-      // renders at the bottom. Prepending each new/older message keeps the
-      // conversation anchored at the newest message with no visible jump.
-      log.prepend(bubble);
-      scrollLogToBottom();
-    }
-
-    async function createChat() {
-      if (creatingChat) return; // prevent double-click -> duplicate empty chats
-      if (pendingInvite) {
-        showInvitation(pendingInvite.code, pendingInvite.keyText, pendingInvite.expiresAt, null);
-        return;
-      }
-      creatingChat = true;
-      byId("newChatButton").disabled = true;
-      try {
-        const rawKey = crypto.getRandomValues(new Uint8Array(32));
-        const keyText = toBase64Url(rawKey);
-        await importChatKey(keyText);
-        const result = await api("/api/invites", { method: "POST", body: "{}" });
-        pendingInvite = { code: result.inviteCode, keyText, expiresAt: result.expiresAt };
-        localStorage.setItem(STORAGE_PENDING_INVITE, JSON.stringify(pendingInvite));
-        showInvitation(result.inviteCode, keyText, result.expiresAt, null);
-        pollPendingInvite();
-        pendingInvitePollTimer = setInterval(pollPendingInvite, 2500);
-      } catch (error) {
-        showToast(error.message);
-      } finally {
-        creatingChat = false;
-        byId("newChatButton").disabled = false;
-      }
-    }
-
-    function formatDuration(ms) {
-      const total = Math.max(0, Math.floor(ms / 1000));
-      const hours = Math.floor(total / 3600);
-      const minutes = Math.floor((total % 3600) / 60);
-      const seconds = total % 60;
-      const two = (n) => String(n).padStart(2, "0");
-      return hours ? `${hours}:${two(minutes)}:${two(seconds)}` : `${two(minutes)}:${two(seconds)}`;
-    }
-
-    function showInvitation(code, keyText, expiresAt, chatId) {
-      const link = `${location.origin}${location.pathname}?invite=${encodeURIComponent(code)}#key=${encodeURIComponent(keyText)}`;
-      const isPendingRequest = !chatId;
-      invitation = { code, link, chatId, isPendingRequest };
-      byId("inviteNumber").textContent = code;
-      byId("inviteLink").value = link;
-      byId("inviteError").textContent = "";
-      byId("inviteWaiting").hidden = !isPendingRequest;
-      byId("cancelInviteButton").hidden = !isPendingRequest;
-      if (isPendingRequest) byId("inviteWaitingText").textContent = "Invite sent. Your chat is practicing its hello.";
-      byId("inviteDialog").showModal();
-      clearInterval(inviteCountdownTimer);
-      const tick = () => {
-        const remaining = new Date(expiresAt).getTime() - Date.now();
-        byId("inviteExpiry").textContent = remaining > 0
-          ? `Expires in ${formatDuration(remaining)} · one yes, one new chat`
-          : "This invite has expired. No chat was created.";
-      };
-      tick();
-      inviteCountdownTimer = setInterval(tick, 1000);
-    }
-
-    async function copyText(text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        showToast("Copied to clipboard");
-      } catch {
-        showToast("Clipboard access is unavailable in this browser.");
-      }
-    }
-
-    async function sendMessage(event) {
-      event.preventDefault();
-      const input = byId("messageInput");
-      const text = input.value.trim();
-      if (!text || !activeChatId) return;
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        showToast("Not connected yet — try again in a moment.");
-        return;
-      }
-      try {
-        const key = await importChatKey(getChatKey(activeChatId));
-        const encrypted = await encryptText(key, text);
-        ws.send(JSON.stringify({ type: "chat", text: encrypted }));
-        input.value = "";
-        input.style.height = "auto";
-        hideEmojiSuggestions();
-      } catch {
-        showToast("Could not encrypt this message.");
-      }
-    }
-
-    function showToast(message) {
-      const toast = byId("toast");
-      toast.textContent = message;
-      toast.hidden = false;
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { toast.hidden = true; }, 2800);
-    }
-
-    byId("authSwitch").addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
-    byId("authForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const button = byId("authSubmit");
-      button.disabled = true;
-      byId("authError").textContent = "";
-      try {
-        const result = await api(`/api/${authMode}`, {
-          method: "POST",
-          body: JSON.stringify({ username: byId("usernameInput").value, password: byId("passwordInput").value })
-        });
-        token = result.token;
-        username = result.username;
-        sessionStorage.setItem(STORAGE_TOKEN, token);
-        await loadApp();
-      } catch (error) {
-        byId("authError").textContent = error.message;
-      } finally {
-        button.disabled = false;
-      }
-    });
-    byId("newChatButton").addEventListener("click", createChat);
-    byId("joinChatButton").addEventListener("click", () => {
-      byId("joinError").textContent = "";
-      byId("joinDialog").showModal();
-    });
-    byId("joinForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const button = byId("joinSubmit");
-      button.disabled = true;
-      byId("joinError").textContent = "";
-      try {
-        await joinByInvite(byId("inviteCodeInput").value, byId("chatKeyInput").value);
-        byId("joinDialog").close();
-        byId("inviteCodeInput").value = "";
-        byId("chatKeyInput").value = "";
-      } catch (error) {
-        byId("joinError").textContent = error.message;
-      } finally {
-        button.disabled = false;
-      }
-    });
-    byId("chatSearch").addEventListener("input", renderChats);
-    byId("messageForm").addEventListener("submit", sendMessage);
-    byId("messageInput").addEventListener("keydown", (event) => {
-      if (!byId("emojiSuggestions").hidden) {
-        if ((event.key === "ArrowDown" || event.key === "ArrowUp") && matchingEmojis.length) {
-          event.preventDefault();
-          const direction = event.key === "ArrowDown" ? 1 : -1;
-          activeEmojiIndex = (activeEmojiIndex + direction + matchingEmojis.length) % matchingEmojis.length;
-          renderEmojiSuggestions();
-          return;
-        }
-        if (event.key === "Enter" && matchingEmojis.length) {
-          event.preventDefault();
-          insertSelectedEmoji();
-          return;
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          hideEmojiSuggestions();
-          return;
-        }
-      }
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        byId("messageForm").requestSubmit();
-      }
-    });
-    byId("messageInput").addEventListener("input", (event) => {
-      const field = event.target;
-      field.style.height = "auto";
-      field.style.height = `${Math.min(field.scrollHeight, 130)}px`;
-      sendTyping(field.value.trim().length > 0);
-      clearTimeout(typingTimer);
-      typingTimer = setTimeout(() => sendTyping(false), 1200);
-      updateEmojiSuggestions();
-    });
-    byId("messageInput").addEventListener("blur", () => {
-      setTimeout(() => {
-        if (!byId("emojiSuggestions").contains(document.activeElement)) hideEmojiSuggestions();
-      }, 100);
-    });
-    byId("shareChatButton").addEventListener("click", async () => {
-      const key = getChatKey(activeChatId);
-      if (!key) return showToast("This device does not have the chat key.");
-      try {
-        const result = await api(`/api/chats/${encodeURIComponent(activeChatId)}/invite`, { method: "POST", body: "{}" });
-        showInvitation(result.inviteCode, key, result.expiresAt, activeChatId);
-      } catch (error) {
-        showToast(error.message);
-      }
-    });
-    byId("copyNumberButton").addEventListener("click", () => invitation && copyText(invitation.code));
-    byId("copyLinkButton").addEventListener("click", () => invitation && copyText(invitation.link));
-    byId("cancelInviteButton").addEventListener("click", cancelPendingInvite);
-    byId("deleteChatButton").addEventListener("click", () => {
-      byId("deleteChatError").textContent = "";
-      byId("deleteChatDialog").showModal();
-    });
-    byId("deleteChatForm").addEventListener("submit", (event) => {
-      event.preventDefault();
-      deleteActiveChat();
-    });
-    byId("backButton").addEventListener("click", () => byId("messenger").classList.remove("conversation-open"));
-    document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => byId(button.dataset.close).close()));
-    byId("inviteDialog").addEventListener("close", () => clearInterval(inviteCountdownTimer));
-    byId("logoutButton").addEventListener("click", async () => {
-      try { await api("/api/logout", { method: "POST", body: "{}" }); } catch { }
-      clearTimeout(reconnectTimer);
-      if (ws) ws.close();
-      ws = null;
-      token = "";
-      username = "";
-      chats = [];
-      activeChatId = "";
-      renderedMessages.clear();
-      sessionStorage.removeItem(STORAGE_TOKEN);
-      byId("messenger").hidden = true;
-      byId("activeChat").hidden = true;
-      byId("emptyState").hidden = false;
-      byId("messenger").classList.remove("conversation-open");
-      byId("messageLog").replaceChildren();
-      byId("authScreen").hidden = false;
-      byId("passwordInput").value = "";
-      byId("authError").textContent = "";
-      setAuthMode("login");
-    });
-
-    if (token) {
-      api("/api/session").then(async (result) => {
-        username = result.username;
-        await loadApp();
-      }).catch(() => {
-        token = "";
-        sessionStorage.removeItem(STORAGE_TOKEN);
-      });
-    }
-  </script>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

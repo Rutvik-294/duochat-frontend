@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with display name and custom username handle",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "username": { "type": "string", "minLength": 3, "maxLength": 24 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "username"]
+    },
+    "UsernameClaim": {
+      "title": "UsernameClaim",
+      "description": "Unique username claim mapping lowercase username to uid",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "ChatReadReceipt": {
+      "title": "ChatReadReceipt",
+      "description": "Tracks the timestamp when a participant opened the chat",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "chatId": { "type": "string" },
+        "lastOpenedAt": { "type": "number" }
+      },
+      "required": ["uid", "username", "chatId", "lastOpenedAt"]
+    },
+    "ChatTypingStatus": {
+      "title": "ChatTypingStatus",
+      "description": "Real-time typing status of participant",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "chatId": { "type": "string" },
+        "typing": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "username", "chatId", "typing", "updatedAt"]
+    },
+    "ChatRequest": {
+      "title": "ChatRequest",
+      "description": "Instagram-style direct message request between users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderUid": { "type": "string" },
+        "senderUsername": { "type": "string" },
+        "recipientUid": { "type": "string" },
+        "recipientUsername": { "type": "string" },
+        "chatId": { "type": "string" },
+        "chatKey": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["senderUid", "senderUsername", "recipientUid", "recipientUsername", "chatId", "chatKey", "status", "createdAt"]
+    },
+    "ChatKey": {
+      "title": "ChatKey",
+      "description": "Secure persistent encryption key backup for chat participants",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "chatId": { "type": "string" },
+        "key": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "chatId", "key", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents keyed by Firebase auth UID"
+    },
+    "/usernames/{username}": {
+      "schema": "UsernameClaim",
+      "description": "Unique handle index mapping username to UID"
+    },
+    "/chats/{chatId}/reads/{userId}": {
+      "schema": "ChatReadReceipt",
+      "description": "Read receipts and open timestamps for chat participants"
+    },
+    "/chats/{chatId}/typing/{userId}": {
+      "schema": "ChatTypingStatus",
+      "description": "Real-time typing indicators for chat participants"
+    },
+    "/chatRequests/{requestId}": {
+      "schema": "ChatRequest",
+      "description": "Direct message requests inbox for users"
+    },
+    "/chats/{chatId}/keys/{userId}": {
+      "schema": "ChatKey",
+      "description": "Persistent encryption key backup per participant"
+    }
+  }
+}

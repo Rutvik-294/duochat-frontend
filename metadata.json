@@ -1,0 +1,7 @@
+{
+  "name": "DuoChat",
+  "description": "A space for two — private, end-to-end encrypted real-time chat between two people.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
