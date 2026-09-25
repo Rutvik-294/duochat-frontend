@@ -298,7 +298,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
   </style>
-  <script type="module" src="/app.js"></script>
 </head>
 <body>
   <section class="signin-screen" id="signinScreen">
@@ -311,7 +310,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
       <p class="auth-description" id="authDescription">Sign in to get back to your space. Just you, your person, and the conversation.</p>
 
       <!-- Google Sign In Button -->
-      <button class="google-auth-button" id="googleAuthButton" type="button">
+      <button class="google-auth-button" id="googleAuthButton" type="button" onclick="window.duoGoogleAuth && window.duoGoogleAuth()">
         <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -324,8 +323,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
       <div id="googleAuthFeedback" style="margin-top: 10px;" hidden>
         <p class="form-error" id="googleAuthError" style="margin: 0; text-align: center;"></p>
         <div id="googleAuthActions" style="display: flex; gap: 8px; justify-content: center; margin-top: 8px;" hidden>
-          <button type="button" class="secondary" id="googleRedirectBtn" style="min-height: 32px; font-size: 11px; padding: 0 10px;">Try Redirect</button>
-          <button type="button" class="secondary" id="openExternalBtn" style="min-height: 32px; font-size: 11px; padding: 0 10px;">Open in New Tab</button>
+          <button type="button" class="secondary" id="googleRedirectBtn" onclick="window.duoGoogleRedirect && window.duoGoogleRedirect()" style="min-height: 32px; font-size: 11px; padding: 0 10px;">Try Redirect</button>
+          <button type="button" class="secondary" id="openExternalBtn" onclick="window.duoOpenExternal && window.duoOpenExternal()" style="min-height: 32px; font-size: 11px; padding: 0 10px;">Open in New Tab</button>
         </div>
       </div>
 
@@ -357,9 +356,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
         <button class="primary auth-submit" id="authSubmit" type="submit">Sign in</button>
       </form>
 
-      <button class="secondary" id="demoLoginBtn" type="button" style="width: 100%; margin-top: 10px; font-size: 13px;">⚡ Instant Demo Account (Test App Now)</button>
+      <button class="secondary" id="demoLoginBtn" type="button" onclick="window.duoDemoLogin && window.duoDemoLogin()" style="width: 100%; margin-top: 10px; font-size: 13px;">⚡ Instant Demo Account (Test App Now)</button>
 
-      <button class="auth-switch" id="authSwitch" type="button">Create a new account</button>
+      <button class="auth-switch" id="authSwitch" type="button" onclick="window.duoAuthSwitch && window.duoAuthSwitch()">Create a new account</button>
       <p class="login-note">Secured with Firebase Authentication. Messages are encrypted on-device.</p>
     </main>
   </section>
@@ -501,5 +500,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

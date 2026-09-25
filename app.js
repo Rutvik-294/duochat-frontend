@@ -921,17 +921,12 @@ async function deleteCurrentChat() {
   }
 }
 
-// Event Listeners
-elements("authSwitch").addEventListener("click", () => showAuthMode(authMode === "login" ? "register" : "login"));
-
-elements("passwordToggle").addEventListener("click", () => {
-  const input = elements("passwordInput");
-  const reveal = input.type === "password";
-  input.type = reveal ? "text" : "password";
-  elements("passwordToggle").setAttribute("aria-label", reveal ? "Hide password" : "Show password");
-  elements("passwordToggle").setAttribute("aria-pressed", String(reveal));
-  elements("passwordToggle").title = reveal ? "Hide password" : "Show password";
-});
+// Global window helpers for direct button invocation
+window.duoAuthSwitch = () => showAuthMode(authMode === "login" ? "register" : "login");
+window.duoGoogleAuth = handleGoogleSignIn;
+window.duoGoogleRedirect = handleGoogleRedirect;
+window.duoOpenExternal = () => window.open(window.location.href, "_blank");
+window.duoDemoLogin = handleDemoLogin;
 
 function setGoogleButtonLoading(loading) {
   const btn = elements("googleAuthButton");
@@ -972,26 +967,14 @@ function handleGoogleAuthError(error) {
   } else if (code === "auth/cancelled-popup-request") {
     errorText.textContent = "Sign-in already in progress in another window.";
   } else if (code === "auth/unauthorized-domain") {
-    errorText.innerHTML = `Domain (<code>${window.location.hostname}</code>) is not on Firebase Authorized Domains.<br>Use <strong>⚡ Instant Demo Account</strong> below to test immediately!`;
+    errorText.innerHTML = `Domain is not on Firebase Authorized Domains. Use <strong>⚡ Instant Demo Account</strong> below to test immediately!`;
   } else {
     errorText.textContent = msg.replace("Firebase: ", "").replace(/\(auth\/[^)]+\)/, "");
+    if (actions) actions.hidden = false;
   }
 }
 
-// Check if user is returning from a redirect sign-in
-getRedirectResult(auth)
-  .then(async (credential) => {
-    if (credential && credential.user) {
-      await handleUserAuthenticated(credential.user);
-    }
-  })
-  .catch((err) => {
-    console.error("Redirect credential error:", err);
-    handleGoogleAuthError(err);
-  });
-
-// Google Authentication
-elements("googleAuthButton").addEventListener("click", async () => {
+async function handleGoogleSignIn() {
   clearAuthErrors();
   setGoogleButtonLoading(true);
   try {
@@ -1005,10 +988,9 @@ elements("googleAuthButton").addEventListener("click", async () => {
   } finally {
     setGoogleButtonLoading(false);
   }
-});
+}
 
-// Google Redirect fallback
-elements("googleRedirectBtn")?.addEventListener("click", async () => {
+async function handleGoogleRedirect() {
   clearAuthErrors();
   setGoogleButtonLoading(true);
   try {
@@ -1017,15 +999,9 @@ elements("googleRedirectBtn")?.addEventListener("click", async () => {
     handleGoogleAuthError(err);
     setGoogleButtonLoading(false);
   }
-});
+}
 
-// Open external tab
-elements("openExternalBtn")?.addEventListener("click", () => {
-  window.open(window.location.href, "_blank");
-});
-
-// Instant Demo Account
-elements("demoLoginBtn")?.addEventListener("click", async () => {
+async function handleDemoLogin() {
   clearAuthErrors();
   const demoUid = `demo_${Math.random().toString(36).substring(2, 9)}`;
   const demoHandle = `tester_${Math.random().toString(36).substring(2, 6)}`;
@@ -1042,158 +1018,207 @@ elements("demoLoginBtn")?.addEventListener("click", async () => {
   }
   await handleUserAuthenticated(fakeUser);
   showToast(`Signed in as @${demoHandle}!`);
-});
+}
 
-// Email / Password Authentication
-elements("authForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const button = elements("authSubmit");
-  button.disabled = true;
-  clearAuthErrors();
+// Safely bind event listeners
+function bindEvents() {
+  const on = (id, event, handler) => {
+    const el = elements(id);
+    if (el) el.addEventListener(event, handler);
+  };
 
-  const email = elements("emailInput").value.trim();
-  const password = elements("passwordInput").value;
-  const desiredUsername = elements("usernameInput").value.trim().toLowerCase();
+  on("authSwitch", "click", () => showAuthMode(authMode === "login" ? "register" : "login"));
 
-  try {
-    if (authMode === "register") {
-      if (!desiredUsername) {
-        throw new Error("Please enter a username handle for DuoChat.");
-      }
-      if (!/^[a-z0-9_]{3,24}$/.test(desiredUsername)) {
-        throw new Error("Username must be 3-24 characters, numbers, or underscores.");
-      }
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await claimUsername(cred.user.uid, desiredUsername, email);
-    } else {
-      await signInWithEmailAndPassword(auth, email, password);
-    }
-  } catch (error) {
-    console.error("Auth error:", error);
-    elements("authError").textContent = error.message.replace("Firebase: ", "");
-  } finally {
-    button.disabled = false;
-  }
-});
+  on("passwordToggle", "click", () => {
+    const input = elements("passwordInput");
+    if (!input) return;
+    const reveal = input.type === "password";
+    input.type = reveal ? "text" : "password";
+    elements("passwordToggle")?.setAttribute("aria-label", reveal ? "Hide password" : "Show password");
+    elements("passwordToggle")?.setAttribute("aria-pressed", String(reveal));
+  });
 
-// Handle Modal for setting username
-elements("handleForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const submitBtn = elements("handleModalSubmit");
-  submitBtn.disabled = true;
-  elements("handleError").textContent = "";
+  on("googleAuthButton", "click", handleGoogleSignIn);
+  on("googleRedirectBtn", "click", handleGoogleRedirect);
+  on("openExternalBtn", "click", () => window.open(window.location.href, "_blank"));
+  on("demoLoginBtn", "click", handleDemoLogin);
 
-  const chosenUsername = elements("handleModalInput").value.trim().toLowerCase();
-  try {
-    if (!currentUser) throw new Error("No active user.");
-    await claimUsername(currentUser.uid, chosenUsername, currentUser.email);
-    elements("handleModal").close();
-    await handleUserAuthenticated(currentUser);
-  } catch (err) {
-    elements("handleError").textContent = err.message;
-  } finally {
-    submitBtn.disabled = false;
-  }
-});
-
-// Sign out
-elements("signoutButton").addEventListener("click", async () => {
-  try {
-    await fbSignOut(auth);
-  } catch (err) {
-    console.error("Signout error:", err);
-  }
-  if (unsubscribeChatReads) {
-    unsubscribeChatReads();
-    unsubscribeChatReads = null;
-  }
-  if (unsubscribeChatTyping) {
-    unsubscribeChatTyping();
-    unsubscribeChatTyping = null;
-  }
-  if (unsubscribeRequests) {
-    unsubscribeRequests();
-    unsubscribeRequests = null;
-  }
-  clearTimeout(partnerTypingTimeout);
-  partnerTypingTimeout = null;
-  sendTyping(false);
-  currentChatReads = {};
-  clearTimeout(reconnectTimer);
-  if (socket) socket.close();
-  socket = null;
-  currentUser = null;
-  token = "";
-  username = "";
-  chats = [];
-  pendingRequests = [];
-  activeChatId = "";
-  elements("chatApp").hidden = true;
-  elements("activeChat").hidden = true;
-  elements("emptyState").hidden = false;
-  elements("chatApp").classList.remove("conversation-open");
-  elements("messages").replaceChildren();
-  elements("signinScreen").hidden = false;
-  elements("passwordInput").value = "";
-  showAuthMode("login");
-});
-
-// Inbox Tabs
-elements("tabMessages").addEventListener("click", () => switchInboxTab("messages"));
-elements("tabRequests").addEventListener("click", () => switchInboxTab("requests"));
-
-// Instagram Style Compose / New Chat
-elements("newChatButton").addEventListener("click", openNewChatModal);
-elements("emptyStartButton").addEventListener("click", openNewChatModal);
-elements("refreshUsersBtn").addEventListener("click", loadAndRenderSuggestedUsers);
-elements("userSearchInput").addEventListener("input", renderSuggestedUsersList);
-
-elements("chatSearch").addEventListener("input", renderChats);
-elements("messageForm").addEventListener("submit", sendMessage);
-elements("msgInput").addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
+  on("authForm", "submit", async (event) => {
     event.preventDefault();
-    elements("messageForm").requestSubmit();
-  }
-});
-elements("msgInput").addEventListener("input", (event) => {
-  const field = event.target;
-  field.style.height = "auto";
-  field.style.height = `${Math.min(field.scrollHeight, 130)}px`;
-  sendTyping(field.value.trim().length > 0);
-});
-elements("msgInput").addEventListener("blur", () => {
-  sendTyping(false);
-});
+    const button = elements("authSubmit");
+    if (button) button.disabled = true;
+    clearAuthErrors();
 
-elements("deleteChatButton").addEventListener("click", () => elements("deleteDialog").showModal());
-elements("deleteForm").addEventListener("submit", (event) => { event.preventDefault(); deleteCurrentChat(); });
-elements("backButton").addEventListener("click", () => elements("chatApp").classList.remove("conversation-open"));
-document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => elements(button.dataset.close).close()));
+    const email = elements("emailInput")?.value.trim() || "";
+    const password = elements("passwordInput")?.value || "";
+    const desiredUsername = elements("usernameInput")?.value.trim().toLowerCase() || "";
 
-// Window focus listeners
-window.addEventListener("focus", () => {
-  if (activeChatId && !elements("activeChat").hidden) {
-    markActiveChatAsOpened();
+    try {
+      if (authMode === "register") {
+        if (!desiredUsername) {
+          throw new Error("Please enter a username handle for DuoChat.");
+        }
+        if (!/^[a-z0-9_]{3,24}$/.test(desiredUsername)) {
+          throw new Error("Username must be 3-24 characters, numbers, or underscores.");
+        }
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        await claimUsername(cred.user.uid, desiredUsername, email);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (error) {
+      console.error("Auth error:", error);
+      if (elements("authError")) {
+        elements("authError").textContent = error.message.replace("Firebase: ", "");
+      }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
+
+  on("handleForm", "submit", async (event) => {
+    event.preventDefault();
+    const submitBtn = elements("handleModalSubmit");
+    if (submitBtn) submitBtn.disabled = true;
+    if (elements("handleError")) elements("handleError").textContent = "";
+
+    const chosenUsername = elements("handleModalInput")?.value.trim().toLowerCase();
+    try {
+      if (!currentUser) throw new Error("No active user.");
+      await claimUsername(currentUser.uid, chosenUsername, currentUser.email);
+      elements("handleModal")?.close();
+      await handleUserAuthenticated(currentUser);
+    } catch (err) {
+      if (elements("handleError")) elements("handleError").textContent = err.message;
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  on("signoutButton", "click", async () => {
+    try {
+      await fbSignOut(auth);
+    } catch (err) {
+      console.error("Signout error:", err);
+    }
+    if (unsubscribeChatReads) {
+      unsubscribeChatReads();
+      unsubscribeChatReads = null;
+    }
+    if (unsubscribeChatTyping) {
+      unsubscribeChatTyping();
+      unsubscribeChatTyping = null;
+    }
+    if (unsubscribeRequests) {
+      unsubscribeRequests();
+      unsubscribeRequests = null;
+    }
+    clearTimeout(partnerTypingTimeout);
+    partnerTypingTimeout = null;
+    sendTyping(false);
+    currentChatReads = {};
+    clearTimeout(reconnectTimer);
+    if (socket) socket.close();
+    socket = null;
+    currentUser = null;
+    token = "";
+    username = "";
+    chats = [];
+    pendingRequests = [];
+    activeChatId = "";
+    if (elements("chatApp")) elements("chatApp").hidden = true;
+    if (elements("activeChat")) elements("activeChat").hidden = true;
+    if (elements("emptyState")) elements("emptyState").hidden = false;
+    elements("chatApp")?.classList.remove("conversation-open");
+    elements("messages")?.replaceChildren();
+    if (elements("signinScreen")) elements("signinScreen").hidden = false;
+    if (elements("passwordInput")) elements("passwordInput").value = "";
+    showAuthMode("login");
+  });
+
+  on("tabMessages", "click", () => switchInboxTab("messages"));
+  on("tabRequests", "click", () => switchInboxTab("requests"));
+
+  on("newChatButton", "click", openNewChatModal);
+  on("emptyStartButton", "click", openNewChatModal);
+  on("refreshUsersBtn", "click", loadAndRenderSuggestedUsers);
+  on("userSearchInput", "input", renderSuggestedUsersList);
+
+  on("chatSearch", "input", renderChats);
+  on("messageForm", "submit", sendMessage);
+
+  const msgInput = elements("msgInput");
+  if (msgInput) {
+    msgInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        elements("messageForm")?.requestSubmit();
+      }
+    });
+    msgInput.addEventListener("input", (event) => {
+      const field = event.target;
+      field.style.height = "auto";
+      field.style.height = `${Math.min(field.scrollHeight, 130)}px`;
+      sendTyping(field.value.trim().length > 0);
+    });
+    msgInput.addEventListener("blur", () => sendTyping(false));
+    msgInput.addEventListener("focus", () => {
+      if (activeChatId) markActiveChatAsOpened();
+    });
   }
-});
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && activeChatId && !elements("activeChat").hidden) {
-    markActiveChatAsOpened();
-  }
-});
-elements("msgInput").addEventListener("focus", () => {
-  if (activeChatId) {
-    markActiveChatAsOpened();
-  }
-});
+
+  on("deleteChatButton", "click", () => elements("deleteDialog")?.showModal());
+  on("deleteForm", "submit", (event) => {
+    event.preventDefault();
+    deleteCurrentChat();
+  });
+  on("backButton", "click", () => elements("chatApp")?.classList.remove("conversation-open"));
+
+  document.querySelectorAll("[data-close]").forEach((button) => {
+    button.addEventListener("click", () => elements(button.dataset.close)?.close());
+  });
+
+  window.addEventListener("focus", () => {
+    if (activeChatId && elements("activeChat") && !elements("activeChat").hidden) {
+      markActiveChatAsOpened();
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && activeChatId && elements("activeChat") && !elements("activeChat").hidden) {
+      markActiveChatAsOpened();
+    }
+  });
+}
+
+// Run binding when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bindEvents);
+} else {
+  bindEvents();
+}
+
+// Check redirect result safely
+try {
+  getRedirectResult(auth)
+    .then(async (credential) => {
+      if (credential && credential.user) {
+        await handleUserAuthenticated(credential.user);
+      }
+    })
+    .catch((err) => {
+      console.warn("Redirect result notice:", err);
+    });
+} catch (e) {
+  console.warn("Could not check redirect credential:", e);
+}
 
 // Listen to Firebase Auth state
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     await handleUserAuthenticated(user);
   } else {
-    elements("signinScreen").hidden = false;
-    elements("chatApp").hidden = true;
+    if (elements("signinScreen")) elements("signinScreen").hidden = false;
+    if (elements("chatApp")) elements("chatApp").hidden = true;
   }
 });
