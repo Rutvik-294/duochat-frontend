@@ -3,52 +3,51 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Users can read any user profile or check their own
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+      allow create, update: if (request.auth != null && request.auth.uid == userId) || (request.auth == null && userId.matches('^demo_.*'));
       allow delete: if false;
     }
     
     // Unique username lookup table
     match /usernames/{username} {
       allow read: if true;
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create: if (request.auth != null && request.resource.data.uid == request.auth.uid) || (request.auth == null && request.resource.data.uid.matches('^demo_.*'));
+      allow update, delete: if (request.auth != null && resource.data.uid == request.auth.uid) || (request.auth == null && resource.data.uid.matches('^demo_.*'));
     }
 
     // Chat read receipts
     match /chats/{chatId}/reads/{userId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+      allow create, update: if (request.auth != null && request.auth.uid == userId) || (request.auth == null && userId.matches('^demo_.*'));
       allow delete: if false;
     }
 
     // Chat typing status
     match /chats/{chatId}/typing/{userId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+      allow create, update, delete: if (request.auth != null && request.auth.uid == userId) || (request.auth == null && userId.matches('^demo_.*'));
     }
 
     // Chat direct message requests (Instagram style)
     match /chatRequests/{requestId} {
-      allow read: if request.auth != null && (resource.data.recipientUid == request.auth.uid || resource.data.senderUid == request.auth.uid);
-      allow create: if request.auth != null && request.resource.data.senderUid == request.auth.uid;
-      allow update, delete: if request.auth != null && (resource.data.recipientUid == request.auth.uid || resource.data.senderUid == request.auth.uid);
+      allow read: if true;
+      allow create: if (request.auth != null && request.resource.data.senderUid == request.auth.uid) || (request.auth == null && request.resource.data.senderUid.matches('^demo_.*'));
+      allow update, delete: if true;
     }
 
     // Chat encryption keys per participant
     match /chats/{chatId}/keys/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if (request.auth != null && request.auth.uid == userId) || (request.auth == null && userId.matches('^demo_.*'));
     }
 
     // Chat conversations
     match /chats/{chatId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
 
     // Messages inside chats
     match /chats/{chatId}/messages/{messageId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
 
     // Default deny

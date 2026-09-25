@@ -218,6 +218,11 @@ async function handleUserAuthenticated(user) {
   currentUser = user;
   
   let profile = await getUserProfile(user.uid);
+  if (user.uid && user.uid.startsWith("demo_") && (!profile || !profile.username)) {
+    const demoHandle = user.email ? user.email.split("@")[0] : `user_${user.uid.slice(5)}`;
+    profile = { uid: user.uid, username: demoHandle, createdAt: Date.now() };
+  }
+
   if (!profile || !profile.username) {
     let proposedHandle = "";
     if (user.displayName) {

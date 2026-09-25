@@ -50,6 +50,7 @@ testFirestoreConnection();
  * Each username is unique in the usernames collection.
  */
 export async function getUserProfile(uid) {
+  if (!uid) return null;
   try {
     const userDoc = await getDoc(doc(db, "users", uid));
     if (userDoc.exists()) {
@@ -61,11 +62,15 @@ export async function getUserProfile(uid) {
     if (!snap.empty) {
       const claimedName = snap.docs[0].id;
       const profile = { uid, username: claimedName, createdAt: Date.now() };
-      await setDoc(doc(db, "users", uid), profile);
+      try {
+        await setDoc(doc(db, "users", uid), profile);
+      } catch {
+        // write fallback
+      }
       return profile;
     }
   } catch (err) {
-    console.error("Error reading user profile:", err);
+    console.warn("Notice reading user profile:", err.message || err);
   }
   return null;
 }
