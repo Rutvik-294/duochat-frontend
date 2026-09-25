@@ -129,12 +129,14 @@
     .quiet { padding: 0 10px; background: transparent; color: var(--muted); }
     .quiet:hover { background: #f1f2ee; color: var(--danger); }
     .cancel-invite { display: block; margin: 8px auto 0; }
-    .opener-button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; white-space: nowrap; }
-    .emoji-toggle { flex: 0 0 auto; min-height: 44px; padding: 0 12px; }
-    .emoji-tray { position: absolute; z-index: 3; left: clamp(12px, 3vw, 34px); bottom: 76px; display: flex; gap: 5px; padding: 7px; border: 1px solid #dce5df; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px #142f2728; animation: tray-in .16s ease-out both; }
-    .emoji-tray[hidden] { display: none; }
-    .emoji-tray button { width: 38px; height: 38px; border: 0; border-radius: 5px; background: transparent; font-size: 20px; transition: transform .13s ease, background .13s ease; }
-    .emoji-tray button:hover { transform: translateY(-3px) scale(1.12); background: #f0f4ed; }
+    .emoji-suggestions { position: absolute; z-index: 3; left: clamp(12px, 3vw, 34px); bottom: 76px; width: min(310px, calc(100% - 24px)); max-height: 260px; overflow-y: auto; padding: 6px; border: 1px solid #dce5df; border-radius: 7px; background: #fff; box-shadow: 0 8px 24px #142f2728; animation: tray-in .16s ease-out both; }
+    .emoji-suggestions[hidden] { display: none; }
+    .emoji-option { width: 100%; min-height: 42px; display: flex; align-items: center; gap: 11px; padding: 5px 9px; border: 0; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; }
+    .emoji-option:hover, .emoji-option.active { background: #eff5f0; }
+    .emoji-glyph { width: 28px; font-size: 21px; text-align: center; }
+    .emoji-name { flex: 1; font-size: 13px; }
+    .emoji-shortcode { color: var(--muted); font-size: 11px; }
+    .emoji-empty { padding: 12px; color: var(--muted); font-size: 13px; }
     .danger-button { min-height: 46px; flex: 1; padding: 0 13px; border: 0; border-radius: 5px; background: #a53c37; color: #fff; font-weight: 700; }
     .danger-button:hover { background: #842e2a; }
     .code-input { letter-spacing: 2px; font-variant-numeric: tabular-nums; }
@@ -161,12 +163,7 @@
       .message { max-width: 90%; }
       .composer { padding: 8px 10px; gap: 8px; }
       .composer textarea { min-height: 42px; padding: 10px 12px; }
-      .opener-button { width: 44px; min-width: 44px; overflow: hidden; padding: 0; font-size: 0; }
-      .opener-button::before { content: "?"; font-size: 16px; }
-      .emoji-toggle { width: 44px; min-width: 44px; overflow: hidden; padding: 0; font-size: 0; }
-      .emoji-toggle::before { content: "☺"; font-size: 19px; }
-      .emoji-tray { left: 8px; bottom: 66px; max-width: calc(100vw - 16px); justify-content: space-between; gap: 1px; }
-      .emoji-tray button { width: 36px; }
+      .emoji-suggestions { left: 8px; bottom: 66px; width: min(310px, calc(100% - 16px)); }
       .send-button { min-width: 52px; padding: 0 10px; }
       dialog { align-self: flex-end; margin-bottom: env(safe-area-inset-bottom, 0px); }
     }
@@ -245,8 +242,6 @@
         <div class="key-warning" id="keyWarning" hidden>This device does not have this chat's encryption key. Re-open the secure invite link on this device.</div>
         <div class="message-log" id="messageLog" aria-live="polite" aria-label="Messages"></div>
         <form class="composer" id="messageForm">
-          <button class="secondary emoji-toggle" id="emojiToggle" type="button" title="Open emoji picker" aria-expanded="false">Emoji</button>
-          <button class="secondary opener-button" id="openerButton" type="button" title="Put a playful conversation starter in the message box">Surprise me</button>
           <textarea id="messageInput" rows="1" maxlength="2000" placeholder="Write a message" aria-label="Message" required></textarea>
           <button class="primary send-button" id="sendButton" type="submit">Send</button>
         </form>
@@ -288,14 +283,7 @@
     </form>
   </dialog>
 
-  <div class="emoji-tray" id="emojiTray" role="group" aria-label="Choose an emoji" hidden>
-    <button type="button" data-emoji="😂" aria-label="Laughing">😂</button>
-    <button type="button" data-emoji="❤️" aria-label="Heart">❤️</button>
-    <button type="button" data-emoji="👀" aria-label="Eyes">👀</button>
-    <button type="button" data-emoji="🙌" aria-label="Celebration">🙌</button>
-    <button type="button" data-emoji="🤔" aria-label="Thinking">🤔</button>
-    <button type="button" data-emoji="✨" aria-label="Sparkles">✨</button>
-    <button type="button" data-emoji="🫡" aria-label="Salute">🫡</button>
+  <div class="emoji-suggestions" id="emojiSuggestions" role="listbox" aria-label="Emoji suggestions" hidden>
   </div>
 
   <dialog id="joinDialog">
@@ -330,6 +318,22 @@
     const PENDING_CHAT_LABEL = "New chat"; // shown until the other member's name arrives
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
+    const emojiCatalog = [
+      ["😀", "grinning", "smile happy face"], ["😃", "smiley", "happy face"], ["😂", "joy", "laugh cry"],
+      ["🤣", "rofl", "laugh rolling"], ["😊", "blush", "smile happy"], ["😍", "heart_eyes", "love"],
+      ["🥰", "smiling_face_with_hearts", "love affection"], ["😘", "kissing_heart", "kiss love"], ["😎", "sunglasses", "cool"],
+      ["🤔", "thinking", "think question"], ["🙄", "roll_eyes", "eyeroll"], ["🥲", "smiling_face_with_tear", "happy sad"],
+      ["😭", "sob", "cry sad"], ["😡", "rage", "angry"], ["🤯", "exploding_head", "mind blown"],
+      ["👀", "eyes", "look see"], ["👍", "thumbsup", "yes good"], ["👎", "thumbsdown", "no bad"],
+      ["🙌", "raised_hands", "celebrate praise"], ["👏", "clap", "applause"], ["🙏", "pray", "please thanks"],
+      ["💀", "skull", "dead funny"], ["🔥", "fire", "hot lit"], ["✨", "sparkles", "magic shiny"],
+      ["❤️", "heart", "love red"], ["💔", "broken_heart", "sad heartbreak"], ["💯", "100", "perfect score"],
+      ["🎉", "tada", "party celebrate"], ["✅", "white_check_mark", "done yes"], ["🤝", "handshake", "deal"],
+      ["🫡", "saluting_face", "salute respect"], ["🤷", "shrug", "dunno"], ["🤦", "facepalm", "oops"],
+      ["🐈", "cat", "pet animal"], ["🐶", "dog", "pet animal"], ["🍕", "pizza", "food"],
+      ["🍿", "popcorn", "snack movie"], ["☕", "coffee", "tea drink"], ["🌮", "taco", "food"],
+      ["🚀", "rocket", "launch space"], ["🌈", "rainbow", "color"], ["💤", "zzz", "sleep tired"]
+    ].map(([emoji, shortcode, keywords]) => ({ emoji, shortcode, keywords }));
 
     let token = sessionStorage.getItem(STORAGE_TOKEN);
     let username = "";
@@ -346,6 +350,9 @@
     let typingTimer = 0;
     let remoteTypingTimer = 0;
     let lastTypingState = false;
+    let matchingEmojis = [];
+    let activeEmojiIndex = 0;
+    let emojiQueryStart = -1;
     let toastTimer = 0;
     let creatingChat = false;
     const renderedMessages = new Set();
@@ -695,8 +702,84 @@
       byId("emptyState").hidden = false;
       byId("messenger").classList.remove("conversation-open");
       byId("messageLog").replaceChildren();
-      byId("emojiTray").hidden = true;
+      hideEmojiSuggestions();
       showToast("Chat deleted. Fresh start, zero awkward history.");
+    }
+
+    function hideEmojiSuggestions() {
+      byId("emojiSuggestions").hidden = true;
+      byId("messageInput").setAttribute("aria-expanded", "false");
+      byId("messageInput").removeAttribute("aria-activedescendant");
+      matchingEmojis = [];
+      activeEmojiIndex = 0;
+      emojiQueryStart = -1;
+    }
+
+    function renderEmojiSuggestions() {
+      const list = byId("emojiSuggestions");
+      list.replaceChildren();
+      if (!matchingEmojis.length) {
+        const empty = document.createElement("div");
+        empty.className = "emoji-empty";
+        empty.textContent = "No emoji found. The colon has standards.";
+        list.append(empty);
+        list.hidden = false;
+        byId("messageInput").setAttribute("aria-expanded", "true");
+        return;
+      }
+      matchingEmojis.slice(0, 8).forEach((item, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.id = `emoji-option-${index}`;
+        option.className = `emoji-option${index === activeEmojiIndex ? " active" : ""}`;
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", String(index === activeEmojiIndex));
+        const glyph = document.createElement("span");
+        glyph.className = "emoji-glyph";
+        glyph.textContent = item.emoji;
+        const name = document.createElement("span");
+        name.className = "emoji-name";
+        name.textContent = item.shortcode.replaceAll("_", " ");
+        const shortcode = document.createElement("span");
+        shortcode.className = "emoji-shortcode";
+        shortcode.textContent = `:${item.shortcode}:`;
+        option.append(glyph, name, shortcode);
+        option.addEventListener("mousedown", (event) => event.preventDefault());
+        option.addEventListener("click", () => insertSelectedEmoji(index));
+        list.append(option);
+      });
+      list.hidden = false;
+      byId("messageInput").setAttribute("aria-expanded", "true");
+      byId("messageInput").setAttribute("aria-activedescendant", `emoji-option-${activeEmojiIndex}`);
+    }
+
+    function updateEmojiSuggestions() {
+      const field = byId("messageInput");
+      const caret = field.selectionStart ?? field.value.length;
+      const beforeCaret = field.value.slice(0, caret);
+      const match = beforeCaret.match(/:([a-z0-9_+-]*)$/i);
+      if (!match) {
+        hideEmojiSuggestions();
+        return;
+      }
+      emojiQueryStart = caret - match[0].length;
+      const query = match[1].toLowerCase();
+      matchingEmojis = emojiCatalog.filter((item) =>
+        item.shortcode.includes(query) || item.keywords.includes(query)
+      ).slice(0, 8);
+      activeEmojiIndex = Math.min(activeEmojiIndex, Math.max(0, matchingEmojis.length - 1));
+      renderEmojiSuggestions();
+    }
+
+    function insertSelectedEmoji(index = activeEmojiIndex) {
+      const selected = matchingEmojis[index];
+      const field = byId("messageInput");
+      if (!selected || emojiQueryStart < 0) return;
+      const caret = field.selectionStart ?? field.value.length;
+      field.setRangeText(`${selected.emoji} `, emojiQueryStart, caret, "end");
+      hideEmojiSuggestions();
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.focus();
     }
 
     async function deleteActiveChat() {
@@ -903,6 +986,7 @@
         ws.send(JSON.stringify({ type: "chat", text: encrypted }));
         input.value = "";
         input.style.height = "auto";
+        hideEmojiSuggestions();
       } catch {
         showToast("Could not encrypt this message.");
       }
@@ -961,6 +1045,25 @@
     byId("chatSearch").addEventListener("input", renderChats);
     byId("messageForm").addEventListener("submit", sendMessage);
     byId("messageInput").addEventListener("keydown", (event) => {
+      if (!byId("emojiSuggestions").hidden) {
+        if ((event.key === "ArrowDown" || event.key === "ArrowUp") && matchingEmojis.length) {
+          event.preventDefault();
+          const direction = event.key === "ArrowDown" ? 1 : -1;
+          activeEmojiIndex = (activeEmojiIndex + direction + matchingEmojis.length) % matchingEmojis.length;
+          renderEmojiSuggestions();
+          return;
+        }
+        if (event.key === "Enter" && matchingEmojis.length) {
+          event.preventDefault();
+          insertSelectedEmoji();
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          hideEmojiSuggestions();
+          return;
+        }
+      }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         byId("messageForm").requestSubmit();
@@ -973,37 +1076,12 @@
       sendTyping(field.value.trim().length > 0);
       clearTimeout(typingTimer);
       typingTimer = setTimeout(() => sendTyping(false), 1200);
+      updateEmojiSuggestions();
     });
-    byId("emojiToggle").addEventListener("click", () => {
-      const tray = byId("emojiTray");
-      tray.hidden = !tray.hidden;
-      byId("emojiToggle").setAttribute("aria-expanded", String(!tray.hidden));
-    });
-    byId("emojiTray").addEventListener("click", (event) => {
-      const button = event.target.closest("[data-emoji]");
-      if (!button) return;
-      const field = byId("messageInput");
-      const start = field.selectionStart ?? field.value.length;
-      const end = field.selectionEnd ?? start;
-      field.setRangeText(button.dataset.emoji, start, end, "end");
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.focus();
-      byId("emojiTray").hidden = true;
-      byId("emojiToggle").setAttribute("aria-expanded", "false");
-    });
-    byId("openerButton").addEventListener("click", () => {
-      const openers = [
-        "Quick poll: is a hot dog a sandwich?",
-        "What tiny thing improved your day by 3%?",
-        "I need a tie-breaker: tea or coffee?",
-        "What is your most defensible unpopular food opinion?",
-        "Would you rather narrate your day like a documentary or a heist movie?",
-        "Important research: best snack, go."
-      ];
-      const field = byId("messageInput");
-      field.value = openers[Math.floor(Math.random() * openers.length)];
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.focus();
+    byId("messageInput").addEventListener("blur", () => {
+      setTimeout(() => {
+        if (!byId("emojiSuggestions").contains(document.activeElement)) hideEmojiSuggestions();
+      }, 100);
     });
     byId("shareChatButton").addEventListener("click", async () => {
       const key = getChatKey(activeChatId);
@@ -1025,12 +1103,6 @@
     byId("deleteChatForm").addEventListener("submit", (event) => {
       event.preventDefault();
       deleteActiveChat();
-    });
-    byId("emojiTray").addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        byId("emojiTray").hidden = true;
-        byId("emojiToggle").setAttribute("aria-expanded", "false");
-      }
     });
     byId("backButton").addEventListener("click", () => byId("messenger").classList.remove("conversation-open"));
     document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => byId(button.dataset.close).close()));
