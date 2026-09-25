@@ -1,4 +1,4 @@
-const PASSWORD_ITERATIONS = 600000;
+const PASSWORD_ITERATIONS = 100000;
 const SESSION_LIFETIME = 7 * 24 * 60 * 60 * 1000;
 const INVITE_LIFETIME = 30 * 60 * 1000;
 const RATE_WINDOW = 15 * 60 * 1000;
@@ -69,7 +69,8 @@ export class ChatRoom {
     if (url.pathname.startsWith("/api/")) {
       try {
         return await this.handleApi(request, url);
-      } catch {
+      } catch (error) {
+        console.error("DuoChat API failure:", error);
         return jsonResponse(request, { error: "Request could not be completed." }, 500);
       }
     }
