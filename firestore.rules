@@ -41,6 +41,16 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Chat conversations
+    match /chats/{chatId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Messages inside chats
+    match /chats/{chatId}/messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

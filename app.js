@@ -3,6 +3,8 @@ import {
   auth,
   googleProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   fbSignOut,
@@ -19,7 +21,12 @@ import {
   acceptDirectChatRequest,
   declineDirectChatRequest,
   savePersistentChatKey,
-  getPersistentChatKey
+  getPersistentChatKey,
+  saveFirestoreChat,
+  subscribeToUserChats,
+  saveFirestoreMessage,
+  subscribeToChatMessages,
+  deleteFirestoreChat
 } from "./src/firebase.js";
 
 const WORKER_URL = "wss://duochat-worker.dwagszone.workers.dev/ws";
@@ -215,15 +222,29 @@ async function handleUserAuthenticated(user) {
     let proposedHandle = "";
     if (user.displayName) {
       proposedHandle = user.displayName.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20);
-    } else if (user.email) {
-      proposedHandle = user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20);
     }
+    if (!proposedHandle || proposedHandle.length < 3) {
+      if (user.email) {
+        proposedHandle = user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20);
+      }
+    }
+    // Attempt auto-claiming handle so user can start chatting immediately
     if (proposedHandle && proposedHandle.length >= 3) {
-      elements("handleModalInput").value = proposedHandle;
+      try {
+        profile = await claimUsername(user.uid, proposedHandle, user.email || "");
+      } catch (e) {
+        console.log("Could not auto-claim handle, asking user:", e);
+      }
     }
-    elements("handleError").textContent = "";
-    elements("handleModal").showModal();
-    return;
+
+    if (!profile || !profile.username) {
+      if (proposedHandle) {
+        elements("handleModalInput").value = proposedHandle;
+      }
+      elements("handleError").textContent = "";
+      elements("handleModal").showModal();
+      return;
+    }
   }
 
   username = profile.username;
@@ -238,6 +259,8 @@ async function handleUserAuthenticated(user) {
   listenToIncomingRequests();
 }
 
+let unsubscribeFirestoreChats = null;
+
 async function loadChats() {
   try {
     const result = await api("/api/chats");
@@ -247,6 +270,22 @@ async function loadChats() {
     console.warn("Could not load chats from worker:", err);
     chats = [];
     renderChats();
+  }
+
+  // Also subscribe to Firestore chats for persistent sync
+  if (unsubscribeFirestoreChats) {
+    unsubscribeFirestoreChats();
+    unsubscribeFirestoreChats = null;
+  }
+  if (username) {
+    unsubscribeFirestoreChats = subscribeToUserChats(username, (fsChats) => {
+      for (const fc of fsChats) {
+        if (!chats.some((c) => c.id === fc.id)) {
+          chats.unshift(fc);
+        }
+      }
+      renderChats();
+    });
   }
 }
 
@@ -497,6 +536,8 @@ function handlePartnerTyping(sender, isTyping) {
   }
 }
 
+let unsubscribeFirestoreMessages = null;
+
 async function selectChat(chatId) {
   activeChatId = chatId;
   updateChatHeader(chatId);
@@ -518,6 +559,14 @@ async function selectChat(chatId) {
   clearTimeout(typingStopTimeout);
   typingStopTimeout = null;
   isCurrentlyTyping = false;
+
+  if (unsubscribeFirestoreMessages) {
+    unsubscribeFirestoreMessages();
+    unsubscribeFirestoreMessages = null;
+  }
+  unsubscribeFirestoreMessages = subscribeToChatMessages(chatId, async (message) => {
+    await renderMessage(message, chatId);
+  });
 
   if (unsubscribeChatReads) {
     unsubscribeChatReads();
@@ -671,13 +720,34 @@ async function sendMessage(event) {
   const input = elements("msgInput");
   const text = input.value.trim();
   if (!text || !activeChatId) return;
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    showToast("Not connected yet. Give it a moment.");
-    return;
-  }
+
   try {
-    const key = await importChatKey(await getOrFetchChatKey(activeChatId));
-    socket.send(JSON.stringify({ type: "chat", text: await encryptMessage(key, text) }));
+    const rawKey = await getOrFetchChatKey(activeChatId);
+    if (!rawKey) {
+      showToast("Missing encryption key for this chat.");
+      return;
+    }
+    const key = await importChatKey(rawKey);
+    const encryptedText = await encryptMessage(key, text);
+    const messageData = {
+      id: crypto.randomUUID(),
+      chatId: activeChatId,
+      sender: username,
+      text: encryptedText,
+      ts: Date.now()
+    };
+
+    // Save to Firestore for reliable multi-user sync & persistent history
+    await saveFirestoreMessage(activeChatId, messageData);
+
+    // Also send via WebSocket if connected
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "chat", text: encryptedText }));
+    }
+
+    // Render immediately in active chat
+    await renderMessage(messageData, activeChatId);
+
     input.value = "";
     input.style.height = "auto";
     sendTyping(false);
@@ -863,15 +933,115 @@ elements("passwordToggle").addEventListener("click", () => {
   elements("passwordToggle").title = reveal ? "Hide password" : "Show password";
 });
 
+function setGoogleButtonLoading(loading) {
+  const btn = elements("googleAuthButton");
+  const textSpan = elements("googleAuthText");
+  if (!btn) return;
+  btn.disabled = loading;
+  if (loading) {
+    if (textSpan) textSpan.textContent = "Connecting to Google...";
+    btn.style.opacity = "0.75";
+  } else {
+    if (textSpan) textSpan.textContent = "Continue with Google";
+    btn.style.opacity = "1";
+  }
+}
+
+function clearAuthErrors() {
+  if (elements("authError")) elements("authError").textContent = "";
+  if (elements("googleAuthError")) elements("googleAuthError").textContent = "";
+  if (elements("googleAuthFeedback")) elements("googleAuthFeedback").hidden = true;
+  if (elements("googleAuthActions")) elements("googleAuthActions").hidden = true;
+}
+
+function handleGoogleAuthError(error) {
+  const code = error?.code || "";
+  const msg = error?.message || String(error);
+  const feedback = elements("googleAuthFeedback");
+  const errorText = elements("googleAuthError");
+  const actions = elements("googleAuthActions");
+
+  if (!feedback || !errorText) return;
+  feedback.hidden = false;
+
+  if (code === "auth/popup-blocked" || msg.includes("popup-blocked") || msg.includes("blocked by the browser")) {
+    errorText.textContent = "Google sign-in popup was blocked by your browser. Try Redirect or Open in a New Tab:";
+    if (actions) actions.hidden = false;
+  } else if (code === "auth/popup-closed-by-user") {
+    errorText.textContent = "Sign-in was cancelled. Click above to try again.";
+  } else if (code === "auth/cancelled-popup-request") {
+    errorText.textContent = "Sign-in already in progress in another window.";
+  } else if (code === "auth/unauthorized-domain") {
+    errorText.innerHTML = `Domain (<code>${window.location.hostname}</code>) is not on Firebase Authorized Domains.<br>Use <strong>⚡ Instant Demo Account</strong> below to test immediately!`;
+  } else {
+    errorText.textContent = msg.replace("Firebase: ", "").replace(/\(auth\/[^)]+\)/, "");
+  }
+}
+
+// Check if user is returning from a redirect sign-in
+getRedirectResult(auth)
+  .then(async (credential) => {
+    if (credential && credential.user) {
+      await handleUserAuthenticated(credential.user);
+    }
+  })
+  .catch((err) => {
+    console.error("Redirect credential error:", err);
+    handleGoogleAuthError(err);
+  });
+
 // Google Authentication
 elements("googleAuthButton").addEventListener("click", async () => {
-  elements("authError").textContent = "";
+  clearAuthErrors();
+  setGoogleButtonLoading(true);
   try {
-    await signInWithPopup(auth, googleProvider);
+    const res = await signInWithPopup(auth, googleProvider);
+    if (res && res.user) {
+      await handleUserAuthenticated(res.user);
+    }
   } catch (error) {
     console.error("Google sign-in error:", error);
-    elements("authError").textContent = error.message.replace("Firebase: ", "");
+    handleGoogleAuthError(error);
+  } finally {
+    setGoogleButtonLoading(false);
   }
+});
+
+// Google Redirect fallback
+elements("googleRedirectBtn")?.addEventListener("click", async () => {
+  clearAuthErrors();
+  setGoogleButtonLoading(true);
+  try {
+    await signInWithRedirect(auth, googleProvider);
+  } catch (err) {
+    handleGoogleAuthError(err);
+    setGoogleButtonLoading(false);
+  }
+});
+
+// Open external tab
+elements("openExternalBtn")?.addEventListener("click", () => {
+  window.open(window.location.href, "_blank");
+});
+
+// Instant Demo Account
+elements("demoLoginBtn")?.addEventListener("click", async () => {
+  clearAuthErrors();
+  const demoUid = `demo_${Math.random().toString(36).substring(2, 9)}`;
+  const demoHandle = `tester_${Math.random().toString(36).substring(2, 6)}`;
+  const fakeUser = {
+    uid: demoUid,
+    email: `${demoHandle}@duochat.local`,
+    displayName: `Tester (@${demoHandle})`
+  };
+  currentUser = fakeUser;
+  try {
+    await claimUsername(demoUid, demoHandle, fakeUser.email);
+  } catch {
+    // claim fallback
+  }
+  await handleUserAuthenticated(fakeUser);
+  showToast(`Signed in as @${demoHandle}!`);
 });
 
 // Email / Password Authentication
@@ -879,7 +1049,7 @@ elements("authForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = elements("authSubmit");
   button.disabled = true;
-  elements("authError").textContent = "";
+  clearAuthErrors();
 
   const email = elements("emailInput").value.trim();
   const password = elements("passwordInput").value;

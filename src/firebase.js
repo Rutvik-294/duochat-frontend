@@ -3,6 +3,8 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut as fbSignOut, 
@@ -29,6 +31,7 @@ export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 // Validate server connectivity as required by Firestore guidelines
 export async function testFirestoreConnection() {
@@ -51,6 +54,15 @@ export async function getUserProfile(uid) {
     const userDoc = await getDoc(doc(db, "users", uid));
     if (userDoc.exists()) {
       return userDoc.data();
+    }
+    // Fallback: check if a username doc claims this uid
+    const q = query(collection(db, "usernames"), where("uid", "==", uid));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const claimedName = snap.docs[0].id;
+      const profile = { uid, username: claimedName, createdAt: Date.now() };
+      await setDoc(doc(db, "users", uid), profile);
+      return profile;
     }
   } catch (err) {
     console.error("Error reading user profile:", err);
@@ -290,10 +302,112 @@ export async function declineDirectChatRequest(requestId) {
   await deleteDoc(reqRef);
 }
 
+/**
+ * Save chat record to Firestore
+ */
+export async function saveFirestoreChat(chat) {
+  if (!chat || !chat.id) return;
+  try {
+    await setDoc(doc(db, "chats", chat.id), {
+      id: chat.id,
+      members: chat.members || [],
+      createdAt: chat.createdAt || Date.now(),
+      updatedAt: Date.now()
+    }, { merge: true });
+  } catch (err) {
+    console.warn("Could not save chat to firestore:", err);
+  }
+}
+
+/**
+ * Subscribe to all chats for the current user in real time
+ */
+export function subscribeToUserChats(username, onUpdate) {
+  if (!username) return () => {};
+  try {
+    const q = query(
+      collection(db, "chats"),
+      where("members", "array-contains", username)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const chatList = [];
+      snapshot.forEach((docSnap) => {
+        chatList.push({ ...docSnap.data(), id: docSnap.id });
+      });
+      chatList.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+      onUpdate(chatList);
+    }, (err) => {
+      console.warn("Error listening to chats:", err);
+    });
+  } catch (err) {
+    console.warn("Could not subscribe to chats:", err);
+    return () => {};
+  }
+}
+
+/**
+ * Save chat message to Firestore subcollection
+ */
+export async function saveFirestoreMessage(chatId, message) {
+  if (!chatId || !message) return;
+  const messageId = message.id || `${message.ts}:${message.sender}`;
+  try {
+    await setDoc(doc(db, "chats", chatId, "messages", messageId), {
+      id: messageId,
+      chatId,
+      sender: message.sender,
+      text: message.text,
+      ts: message.ts || Date.now()
+    });
+    await setDoc(doc(db, "chats", chatId), {
+      lastMessageTs: message.ts || Date.now(),
+      updatedAt: Date.now()
+    }, { merge: true });
+  } catch (err) {
+    console.warn("Could not save message to firestore:", err);
+  }
+}
+
+/**
+ * Subscribe to messages in a chat conversation in real time
+ */
+export function subscribeToChatMessages(chatId, onMessage) {
+  if (!chatId) return () => {};
+  try {
+    const q = query(collection(db, "chats", chatId, "messages"));
+    return onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          onMessage(change.doc.data());
+        }
+      });
+    }, (err) => {
+      console.warn("Error listening to chat messages:", err);
+    });
+  } catch (err) {
+    console.warn("Could not subscribe to chat messages:", err);
+    return () => {};
+  }
+}
+
+/**
+ * Delete a chat in Firestore
+ */
+export async function deleteFirestoreChat(chatId) {
+  if (!chatId) return;
+  try {
+    await deleteDoc(doc(db, "chats", chatId));
+  } catch (err) {
+    console.warn("Could not delete firestore chat:", err);
+  }
+}
+
 export {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   fbSignOut,
   onAuthStateChanged,
   updateProfile

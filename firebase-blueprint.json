@@ -75,9 +75,45 @@
         "createdAt": { "type": "number" }
       },
       "required": ["uid", "chatId", "key", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Conversation between two participants with members and timestamp",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "members": { "type": "array" },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "number" },
+        "lastMessage": { "type": "string" },
+        "lastMessageTs": { "type": "number" }
+      },
+      "required": ["id", "members", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "End-to-end encrypted message record stored under a chat conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "chatId": { "type": "string" },
+        "sender": { "type": "string" },
+        "senderUid": { "type": "string" },
+        "text": { "type": "string" },
+        "ts": { "type": "number" }
+      },
+      "required": ["id", "chatId", "sender", "senderUid", "text", "ts"]
     }
   },
   "firestore": {
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Conversation documents representing direct chats"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages subcollection within a conversation"
+    },
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile documents keyed by Firebase auth UID"
