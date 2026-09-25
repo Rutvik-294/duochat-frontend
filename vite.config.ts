@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: process.env.GITHUB_PAGES === 'true' ? '/duochat-frontend/' : '/',
+    base: process.env.GITHUB_PAGES === 'true' ? '/duochat-frontend/' : './',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
