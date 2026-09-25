@@ -100,6 +100,9 @@
     .chat-heading strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .chat-status { margin-top: 3px; color: var(--muted); font-size: 12px; }
     .chat-status.connected { color: var(--green); }
+    .chat-status.typing { color: #cf6d42; animation: typing-breathe .8s ease-in-out infinite alternate; }
+    .delete-chat-button { color: #9e4640; }
+    .delete-chat-button:hover { background: #f8e7e4; }
     .back-button { display: none; }
     .message-log { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; padding: 22px clamp(14px, 5vw, 72px); scroll-behavior: smooth; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
     .message { max-width: min(76%, 640px); padding: 9px 11px 7px; border-radius: 6px; background: var(--white); box-shadow: 0 1px 1px #23234012; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.45; animation: message-in .18s ease-out both; }
@@ -127,11 +130,20 @@
     .quiet:hover { background: #f1f2ee; color: var(--danger); }
     .cancel-invite { display: block; margin: 8px auto 0; }
     .opener-button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; white-space: nowrap; }
+    .emoji-toggle { flex: 0 0 auto; min-height: 44px; padding: 0 12px; }
+    .emoji-tray { position: absolute; z-index: 3; left: clamp(12px, 3vw, 34px); bottom: 76px; display: flex; gap: 5px; padding: 7px; border: 1px solid #dce5df; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px #142f2728; animation: tray-in .16s ease-out both; }
+    .emoji-tray[hidden] { display: none; }
+    .emoji-tray button { width: 38px; height: 38px; border: 0; border-radius: 5px; background: transparent; font-size: 20px; transition: transform .13s ease, background .13s ease; }
+    .emoji-tray button:hover { transform: translateY(-3px) scale(1.12); background: #f0f4ed; }
+    .danger-button { min-height: 46px; flex: 1; padding: 0 13px; border: 0; border-radius: 5px; background: #a53c37; color: #fff; font-weight: 700; }
+    .danger-button:hover { background: #842e2a; }
     .code-input { letter-spacing: 2px; font-variant-numeric: tabular-nums; }
     .toast { position: fixed; z-index: 5; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 15px; border-radius: 5px; background: var(--c-darkest); color: var(--white); box-shadow: 0 6px 24px #0003; font-size: 13px; text-align: center; }
 
     @keyframes message-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes waiting-pulse { 70% { box-shadow: 0 0 0 8px #16a98200; } 100% { box-shadow: 0 0 0 0 #16a98200; } }
+    @keyframes typing-breathe { to { opacity: .55; } }
+    @keyframes tray-in { from { opacity: 0; transform: translateY(5px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
     @media (min-width: 1441px) { .messenger { border-radius: 7px; } }
     @media (max-width: 760px) {
       html, body { height: 100%; height: 100dvh; overflow: hidden; }
@@ -151,6 +163,10 @@
       .composer textarea { min-height: 42px; padding: 10px 12px; }
       .opener-button { width: 44px; min-width: 44px; overflow: hidden; padding: 0; font-size: 0; }
       .opener-button::before { content: "?"; font-size: 16px; }
+      .emoji-toggle { width: 44px; min-width: 44px; overflow: hidden; padding: 0; font-size: 0; }
+      .emoji-toggle::before { content: "☺"; font-size: 19px; }
+      .emoji-tray { left: 8px; bottom: 66px; max-width: calc(100vw - 16px); justify-content: space-between; gap: 1px; }
+      .emoji-tray button { width: 36px; }
       .send-button { min-width: 52px; padding: 0 10px; }
       dialog { align-self: flex-end; margin-bottom: env(safe-area-inset-bottom, 0px); }
     }
@@ -224,10 +240,12 @@
           <div class="avatar" id="chatAvatar">D</div>
           <div class="chat-heading"><strong id="chatName">Chat</strong><div class="chat-status" id="chatStatus">Connecting</div></div>
           <button class="icon-button" id="shareChatButton" type="button" title="Share an invite">Invite</button>
+          <button class="icon-button delete-chat-button" id="deleteChatButton" type="button" title="Delete this chat for both people">Delete</button>
         </header>
         <div class="key-warning" id="keyWarning" hidden>This device does not have this chat's encryption key. Re-open the secure invite link on this device.</div>
         <div class="message-log" id="messageLog" aria-live="polite" aria-label="Messages"></div>
         <form class="composer" id="messageForm">
+          <button class="secondary emoji-toggle" id="emojiToggle" type="button" title="Open emoji picker" aria-expanded="false">Emoji</button>
           <button class="secondary opener-button" id="openerButton" type="button" title="Put a playful conversation starter in the message box">Surprise me</button>
           <textarea id="messageInput" rows="1" maxlength="2000" placeholder="Write a message" aria-label="Message" required></textarea>
           <button class="primary send-button" id="sendButton" type="submit">Send</button>
@@ -256,6 +274,29 @@
       <p class="form-error" id="inviteError" role="status"></p>
     </div>
   </dialog>
+
+  <dialog id="deleteChatDialog">
+    <form class="dialog-inner" id="deleteChatForm">
+      <button class="icon-button dialog-close" data-close="deleteChatDialog" type="button" title="Close">Close</button>
+      <h2>End this chat?</h2>
+      <p>This deletes the conversation and its saved messages for both people. No dramatic goodbye required, but this is the point of no undo.</p>
+      <p class="form-error" id="deleteChatError" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="secondary" data-close="deleteChatDialog" type="button">Keep chatting</button>
+        <button class="danger-button" id="confirmDeleteChat" type="submit">Delete for both</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="emoji-tray" id="emojiTray" role="group" aria-label="Choose an emoji" hidden>
+    <button type="button" data-emoji="😂" aria-label="Laughing">😂</button>
+    <button type="button" data-emoji="❤️" aria-label="Heart">❤️</button>
+    <button type="button" data-emoji="👀" aria-label="Eyes">👀</button>
+    <button type="button" data-emoji="🙌" aria-label="Celebration">🙌</button>
+    <button type="button" data-emoji="🤔" aria-label="Thinking">🤔</button>
+    <button type="button" data-emoji="✨" aria-label="Sparkles">✨</button>
+    <button type="button" data-emoji="🫡" aria-label="Salute">🫡</button>
+  </div>
 
   <dialog id="joinDialog">
     <form class="dialog-inner" id="joinForm">
@@ -302,6 +343,9 @@
     let pendingInvitePollTimer = 0;
     let pendingInvite = null;
     let invitePollInFlight = false;
+    let typingTimer = 0;
+    let remoteTypingTimer = 0;
+    let lastTypingState = false;
     let toastTimer = 0;
     let creatingChat = false;
     const renderedMessages = new Set();
@@ -592,6 +636,7 @@
       byId("chatName").textContent = other;
       byId("chatAvatar").textContent = other === PENDING_CHAT_LABEL ? "?" : other.slice(0, 1).toUpperCase();
       byId("shareChatButton").hidden = chat.members.length >= 2;
+      byId("deleteChatButton").hidden = chat.members.length < 2;
     }
 
     async function selectChat(id) {
@@ -620,10 +665,55 @@
       refreshChats();
     }
 
-    function setChatStatus(text, connected = false) {
+    function setChatStatus(text, connected = false, typing = false) {
       const status = byId("chatStatus");
       status.textContent = text;
       status.classList.toggle("connected", connected);
+      status.classList.toggle("typing", typing);
+    }
+
+    function sendTyping(active) {
+      if (!ws || ws.readyState !== WebSocket.OPEN || !activeChatId || lastTypingState === active) return;
+      lastTypingState = active;
+      ws.send(JSON.stringify({ type: "typing", active }));
+    }
+
+    function forgetDeletedChat(chatId) {
+      chats = chats.filter((chat) => chat.id !== chatId);
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}${chatId}`);
+      renderChats();
+      if (activeChatId !== chatId) return;
+      clearTimeout(reconnectTimer);
+      clearTimeout(typingTimer);
+      clearTimeout(remoteTypingTimer);
+      activeChatId = "";
+      lastTypingState = false;
+      const deletedSocket = ws;
+      ws = null;
+      if (deletedSocket && deletedSocket.readyState < WebSocket.CLOSING) deletedSocket.close();
+      byId("activeChat").hidden = true;
+      byId("emptyState").hidden = false;
+      byId("messenger").classList.remove("conversation-open");
+      byId("messageLog").replaceChildren();
+      byId("emojiTray").hidden = true;
+      showToast("Chat deleted. Fresh start, zero awkward history.");
+    }
+
+    async function deleteActiveChat() {
+      const chatId = activeChatId;
+      if (!chatId) return;
+      const button = byId("confirmDeleteChat");
+      button.disabled = true;
+      byId("deleteChatError").textContent = "";
+      try {
+        await api(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" });
+        byId("deleteChatDialog").close();
+        forgetDeletedChat(chatId);
+      } catch (error) {
+        byId("deleteChatError").textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
     }
 
     function connectToChat(id) {
@@ -646,6 +736,16 @@
         } else if (data.type === "chat_updated") {
           upsertChat(data.chat);
           updateChatHeader(id);
+        } else if (data.type === "typing") {
+          clearTimeout(remoteTypingTimer);
+          if (data.active) {
+            setChatStatus(`${data.sender} is typing…`, false, true);
+            remoteTypingTimer = setTimeout(() => setChatStatus("End-to-end encrypted", Boolean(getChatKey(id))), 1500);
+          } else {
+            setChatStatus("End-to-end encrypted", Boolean(getChatKey(id)));
+          }
+        } else if (data.type === "chat_deleted") {
+          forgetDeletedChat(data.chatId);
         } else if (data.type === "chat") {
           await addMessage(data.message, id);
         } else if (data.type === "error") {
@@ -870,6 +970,26 @@
       const field = event.target;
       field.style.height = "auto";
       field.style.height = `${Math.min(field.scrollHeight, 130)}px`;
+      sendTyping(field.value.trim().length > 0);
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => sendTyping(false), 1200);
+    });
+    byId("emojiToggle").addEventListener("click", () => {
+      const tray = byId("emojiTray");
+      tray.hidden = !tray.hidden;
+      byId("emojiToggle").setAttribute("aria-expanded", String(!tray.hidden));
+    });
+    byId("emojiTray").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-emoji]");
+      if (!button) return;
+      const field = byId("messageInput");
+      const start = field.selectionStart ?? field.value.length;
+      const end = field.selectionEnd ?? start;
+      field.setRangeText(button.dataset.emoji, start, end, "end");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.focus();
+      byId("emojiTray").hidden = true;
+      byId("emojiToggle").setAttribute("aria-expanded", "false");
     });
     byId("openerButton").addEventListener("click", () => {
       const openers = [
@@ -898,6 +1018,20 @@
     byId("copyNumberButton").addEventListener("click", () => invitation && copyText(invitation.code));
     byId("copyLinkButton").addEventListener("click", () => invitation && copyText(invitation.link));
     byId("cancelInviteButton").addEventListener("click", cancelPendingInvite);
+    byId("deleteChatButton").addEventListener("click", () => {
+      byId("deleteChatError").textContent = "";
+      byId("deleteChatDialog").showModal();
+    });
+    byId("deleteChatForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      deleteActiveChat();
+    });
+    byId("emojiTray").addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        byId("emojiTray").hidden = true;
+        byId("emojiToggle").setAttribute("aria-expanded", "false");
+      }
+    });
     byId("backButton").addEventListener("click", () => byId("messenger").classList.remove("conversation-open"));
     document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => byId(button.dataset.close).close()));
     byId("inviteDialog").addEventListener("close", () => clearInterval(inviteCountdownTimer));

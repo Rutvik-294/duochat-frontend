@@ -122,6 +122,8 @@ export class ChatRoom {
     if (path === "/api/chats" && request.method === "POST") return this.createChat(request, username);
     if (path === "/api/chats/join" && request.method === "POST") return this.joinChat(request, username);
     if (path === "/api/invites" && request.method === "POST") return this.createPendingInvite(request, username);
+    const chatMatch = path.match(/^\/api\/chats\/([a-f0-9-]+)$/);
+    if (chatMatch && request.method === "DELETE") return this.deleteChat(request, username, chatMatch[1]);
     const pendingInviteMatch = path.match(/^\/api\/invites\/(\d{12})$/);
     if (pendingInviteMatch && request.method === "GET") return this.getPendingInvite(request, username, pendingInviteMatch[1]);
     if (pendingInviteMatch && request.method === "DELETE") return this.cancelPendingInvite(request, username, pendingInviteMatch[1]);
@@ -241,6 +243,36 @@ export class ChatRoom {
     const expiresAt = Date.now() + INVITE_LIFETIME;
     await this.state.storage.put(`invite:${inviteHash}`, { owner: username, expiresAt });
     return jsonResponse(request, { inviteCode, expiresAt }, 201);
+  }
+
+  async deleteChat(request, username, chatId) {
+    const chat = await this.state.storage.get(`chat:${chatId}`);
+    if (!chat || !chat.members.includes(username)) {
+      return jsonResponse(request, { error: "Chat not found." }, 404);
+    }
+
+    await this.state.storage.transaction(async (transaction) => {
+      const currentChat = await transaction.get(`chat:${chatId}`);
+      if (!currentChat || !currentChat.members.includes(username)) return;
+      if (currentChat.inviteHash) await transaction.delete(`invite:${currentChat.inviteHash}`);
+      const inviteStatuses = await transaction.list({ prefix: "invite-status:" });
+      for (const [key, status] of inviteStatuses) {
+        if (status.chat?.id === chatId) await transaction.delete(key);
+      }
+      await transaction.delete(`chat:${chatId}`);
+      await transaction.delete(`messages:${chatId}`);
+    });
+
+    const payload = JSON.stringify({ type: "chat_deleted", chatId });
+    for (const session of this.sessions) {
+      if (session.chatId !== chatId) continue;
+      this.sessions.delete(session);
+      try {
+        if (session.ws.readyState === 1) session.ws.send(payload);
+        session.ws.close(1008, "Chat deleted");
+      } catch { }
+    }
+    return jsonResponse(request, { ok: true, chatId });
   }
 
   async getPendingInvite(request, username, inviteCode) {
@@ -371,6 +403,14 @@ export class ChatRoom {
       if (session.expiresAt <= Date.now()) {
         this.sessions.delete(session);
         ws.close(1008, "Session expired");
+        return;
+      }
+      if (data.type === "typing" && typeof data.active === "boolean") {
+        const payload = JSON.stringify({ type: "typing", sender: session.username, active: data.active });
+        for (const recipient of this.sessions) {
+          if (recipient.chatId !== session.chatId || recipient === session || recipient.ws.readyState !== 1) continue;
+          try { recipient.ws.send(payload); } catch { this.sessions.delete(recipient); }
+        }
         return;
       }
       if (data.type !== "chat" || typeof data.text !== "string" || data.text.length > 6000) return;
