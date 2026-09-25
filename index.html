@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>DuoChat</title></head>
+<body style="font-family:sans-serif; max-width:500px; margin:20px auto;">
+
+<div id="setup">
+  <p>Your name:</p>
+  <input id="nameInput" placeholder="name">
+  <button onclick="start()">Join</button>
+</div>
+
+<div id="chat" style="display:none;">
+  <div id="log" style="height:350px; overflow-y:auto; border:1px solid #ccc; padding:8px; margin-bottom:8px;"></div>
+  <input id="msgInput" placeholder="message" style="width:70%;" onkeydown="if(event.key==='Enter')send()">
+  <button onclick="send()">Send</button>
+</div>
+
+<script>
+// ====== SET THIS AFTER DEPLOYING THE WORKER =====
+	const WORKER_URL = "wss://duochat-worker.dwagszone.workers.dev/ws";
+// ===================================================
+
+let ws, me;
+
+function start(){
+  me = document.getElementById('nameInput').value.trim() || "anon";
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('chat').style.display = 'block';
+
+  ws = new WebSocket(WORKER_URL);
+  ws.onmessage = (evt) => {
+    const data = JSON.parse(evt.data);
+    if (data.type === "history") data.messages.forEach(addMsg);
+    else if (data.type === "chat") addMsg(data.message);
+  };
+  ws.onclose = () => addMsg({ sender: "system", text: "disconnected — refresh to reconnect", ts: Date.now() });
+}
+
+function addMsg(m){
+  const log = document.getElementById('log');
+  const div = document.createElement('div');
+  const time = new Date(m.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  div.textContent = `[${time}] ${m.sender}: ${m.text}`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function send(){
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if (!text || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: "chat", sender: me, text }));
+  input.value = '';
+}
+</script>
+</body>
+</html>
