@@ -6,6 +6,8 @@
 <div id="setup">
   <p>Your name:</p>
   <input id="nameInput" placeholder="name">
+  <p>Shared passphrase (must match your friend's exactly):</p>
+  <input id="passInput" type="password" placeholder="passphrase">
   <button onclick="start()">Join</button>
 </div>
 
@@ -16,40 +18,91 @@
 </div>
 
 <script>
-// ====== SET THIS AFTER DEPLOYING THE WORKER =====
-	const WORKER_URL = "wss://duochat-worker.dwagszone.workers.dev/ws";
+// ====== SET THIS AFTER DEPLOYING THE WORKER ======
+const WORKER_URL = "wss://duochat-worker.dwagszone.workers.dev/ws";
 // ===================================================
 
-let ws, me;
+// Fixed, non-secret salt — fine for PBKDF2 (salt just needs to prevent
+// precomputed-table attacks, it doesn't need to be secret).
+const SALT = new TextEncoder().encode("duochat-fixed-salt-v1");
+const PBKDF2_ITERATIONS = 150000;
 
-function start(){
+let ws, me, aesKey;
+
+// ---- Key derivation: passphrase -> AES-256-GCM key ----
+async function deriveKey(passphrase){
+  const baseKey = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: SALT, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBuf(b64){ return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+
+// ---- Encrypt: AES-GCM produces ciphertext + auth tag (the "MAC") in one call ----
+async function encryptText(key, text){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text));
+  return JSON.stringify({ iv: bufToB64(iv), ct: bufToB64(ct) });
+}
+
+// ---- Decrypt + Vrfy: subtle.decrypt checks the tag itself; throws if it fails ----
+async function decryptText(key, payload){
+  try {
+    const { iv, ct } = JSON.parse(payload);
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: b64ToBuf(iv) }, key, b64ToBuf(ct)
+    );
+    return new TextDecoder().decode(plainBuf);
+  } catch (e) {
+    return "⚠️ [could not decrypt — wrong passphrase or tampered message]";
+  }
+}
+
+async function start(){
   me = document.getElementById('nameInput').value.trim() || "anon";
+  const passphrase = document.getElementById('passInput').value;
+  if (!passphrase) { alert("Enter a passphrase — both of you must use the same one."); return; }
+  aesKey = await deriveKey(passphrase);
+
   document.getElementById('setup').style.display = 'none';
   document.getElementById('chat').style.display = 'block';
 
   ws = new WebSocket(WORKER_URL);
-  ws.onmessage = (evt) => {
+  ws.onmessage = async (evt) => {
     const data = JSON.parse(evt.data);
-    if (data.type === "history") data.messages.forEach(addMsg);
-    else if (data.type === "chat") addMsg(data.message);
+    if (data.type === "history") {
+      for (const m of data.messages) await addMsg(m);
+    } else if (data.type === "chat") {
+      await addMsg(data.message);
+    }
   };
-  ws.onclose = () => addMsg({ sender: "system", text: "disconnected — refresh to reconnect", ts: Date.now() });
+  ws.onclose = () => addMsg({ sender: "system", text: JSON.stringify({iv:"",ct:""}), ts: Date.now(), plain: "disconnected — refresh to reconnect" });
 }
 
-function addMsg(m){
+async function addMsg(m){
   const log = document.getElementById('log');
   const div = document.createElement('div');
   const time = new Date(m.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-  div.textContent = `[${time}] ${m.sender}: ${m.text}`;
+  const shown = m.plain !== undefined ? m.plain : await decryptText(aesKey, m.text);
+  div.textContent = `[${time}] ${m.sender}: ${shown}`;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
 }
 
-function send(){
+async function send(){
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if (!text || !ws || ws.readyState !== 1) return;
-  ws.send(JSON.stringify({ type: "chat", sender: me, text }));
+  const encrypted = await encryptText(aesKey, text);
+  ws.send(JSON.stringify({ type: "chat", sender: me, text: encrypted }));
   input.value = '';
 }
 </script>
