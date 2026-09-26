@@ -24,7 +24,12 @@ import {
   subscribeToUserChats,
   saveFirestoreMessage,
   subscribeToChatMessages,
-  deleteFirestoreChat
+  deleteFirestoreChat,
+  createRoomInvite,
+  getRoomInvite,
+  subscribeToRoomInvite,
+  acceptRoomInvite,
+  cancelRoomInvite
 } from './firebase.js';
 
 // Types
@@ -71,6 +76,69 @@ interface RegisteredUser {
   email?: string;
   createdAt?: number;
 }
+
+interface RoomInvite {
+  code: string;
+  creatorUid: string;
+  creatorUsername: string;
+  chatId: string;
+  chatKey: string;
+  expiresAt: number;
+  status: 'pending' | 'accepted' | 'cancelled';
+  acceptedByUsername?: string;
+}
+
+interface EmojiItem {
+  emoji: string;
+  shortcode: string;
+  keywords: string;
+}
+
+// 42 Curated Emojis from DuoChat
+const EMOJI_CATALOG: EmojiItem[] = [
+  ["😀", "grinning", "smile happy face"],
+  ["😃", "smiley", "happy face"],
+  ["😂", "joy", "laugh cry"],
+  ["🤣", "rofl", "laugh rolling"],
+  ["😊", "blush", "smile happy"],
+  ["😍", "heart_eyes", "love"],
+  ["🥰", "smiling_face_with_hearts", "love affection"],
+  ["😘", "kissing_heart", "kiss love"],
+  ["😎", "sunglasses", "cool"],
+  ["🤔", "thinking", "think question"],
+  ["🙄", "roll_eyes", "eyeroll"],
+  ["🥲", "smiling_face_with_tear", "happy sad"],
+  ["😭", "sob", "cry sad"],
+  ["😡", "rage", "angry"],
+  ["🤯", "exploding_head", "mind blown"],
+  ["👀", "eyes", "look see"],
+  ["👍", "thumbsup", "yes good"],
+  ["👎", "thumbsdown", "no bad"],
+  ["🙌", "raised_hands", "celebrate praise"],
+  ["👏", "clap", "applause"],
+  ["🙏", "pray", "please thanks"],
+  ["💀", "skull", "dead funny"],
+  ["🔥", "fire", "hot lit"],
+  ["✨", "sparkles", "magic shiny"],
+  ["❤️", "heart", "love red"],
+  ["💔", "broken_heart", "sad heartbreak"],
+  ["💯", "100", "perfect score"],
+  ["🎉", "tada", "party celebrate"],
+  ["✅", "white_check_mark", "done yes"],
+  ["🤝", "handshake", "deal"],
+  ["🫡", "saluting_face", "salute respect"],
+  ["🤷", "shrug", "dunno"],
+  ["🤦", "facepalm", "oops"],
+  ["🐈", "cat", "pet animal"],
+  ["🐶", "dog", "pet animal"],
+  ["🍕", "pizza", "food"],
+  ["🍿", "popcorn", "snack movie"],
+  ["☕", "coffee", "tea drink"],
+  ["🌮", "taco", "food"],
+  ["🚀", "rocket", "launch space"],
+  ["🌈", "rainbow", "color"],
+  ["💤", "zzz", "sleep tired"]
+].map(([emoji, shortcode, keywords]) => ({ emoji, shortcode, keywords }));
 
 const CHAT_KEY_PREFIX = 'duochat:key:';
 const encoder = new TextEncoder();
@@ -139,6 +207,14 @@ async function decryptMessage(key: CryptoKey, payload: string): Promise<string> 
   return '[Encrypted message]';
 }
 
+function formatDuration(ms: number) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${two(minutes)}:${two(seconds)}`;
+}
+
 export default function App() {
   // Authentication State
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -158,276 +234,186 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState('');
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
+  const [hasCryptoKey, setHasCryptoKey] = useState(true);
   const [partnerTyping, setPartnerTyping] = useState(false);
-  const [chatReads, setChatReads] = useState<Record<string, number>>({});
+  const [chatReads, setChatReads] = useState<{ [username: string]: number }>({});
 
-  // Requests & Users State
+  // Direct Message Requests State
   const [pendingRequests, setPendingRequests] = useState<ChatRequest[]>([]);
+
+  // 12-Digit Room Invite State
+  const [activeInvite, setActiveInvite] = useState<RoomInvite | null>(null);
+  const [inviteTimeRemaining, setInviteTimeRemaining] = useState<number>(0);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+
+  // Join Room with Number Modal State
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [joinKeyInput, setJoinKeyInput] = useState('');
+  const [joinError, setJoinError] = useState('');
+  const [joiningChat, setJoiningChat] = useState(false);
+
+  // New Chat User Discovery Modal State
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [newChatError, setNewChatError] = useState('');
 
-  // Modals & UI
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  // Choose Username / Handle Modal State
   const [showHandleModal, setShowHandleModal] = useState(false);
   const [handleModalInput, setHandleModalInput] = useState('');
   const [handleModalError, setHandleModalError] = useState('');
+  const [pendingGoogleUser, setPendingGoogleUser] = useState<any>(null);
+
+  // Modals & Feedback
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [newChatError, setNewChatError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
 
-  // Refs
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const toastTimeoutRef = useRef<number | null>(null);
-  const typingTimeoutRef = useRef<number | null>(null);
-  const lastTypingSentRef = useRef<number>(0);
+  // Emoji Suggestions State
+  const [emojiQuery, setEmojiQuery] = useState<{ query: string; startIndex: number } | null>(null);
+  const [activeEmojiIndex, setActiveEmojiIndex] = useState(0);
 
+  // Refs
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<any>(null);
+  const isTypingRef = useRef(false);
+
+  // Toast Helper
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = window.setTimeout(() => setToastMessage(''), 3500);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? '' : prev));
+    }, 3200);
   }, []);
 
-  // Save chat key locally and to Firestore
-  const persistChatKey = useCallback((chatId: string, keyStr: string) => {
+  // Filtered Emoji Suggestions
+  const matchingEmojis = useMemo(() => {
+    if (!emojiQuery) return [];
+    const q = emojiQuery.query.toLowerCase();
+    return EMOJI_CATALOG.filter((item) =>
+      item.shortcode.toLowerCase().includes(q) || item.keywords.toLowerCase().includes(q)
+    ).slice(0, 7);
+  }, [emojiQuery]);
+
+  // Read URL parameters and fragment for invites (#key=... or ?invite=...)
+  const checkUrlInvite = useCallback(() => {
     try {
-      localStorage.setItem(`${CHAT_KEY_PREFIX}${chatId}`, keyStr);
-      if (currentUser?.uid) {
-        savePersistentChatKey(chatId, currentUser.uid, keyStr);
+      const urlParams = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+      const hashParams = new URLSearchParams(hash);
+
+      const code = urlParams.get('invite') || hashParams.get('code') || '';
+      const key = hashParams.get('key') || urlParams.get('key') || '';
+
+      if (code) {
+        setJoinCodeInput(code.replace(/\D/g, '').slice(0, 12));
+      }
+      if (key) {
+        setJoinKeyInput(key);
+      }
+      if (code || key) {
+        setShowJoinModal(true);
       }
     } catch (e) {
-      console.warn('Could not persist chat key:', e);
+      console.warn('Could not parse URL invite:', e);
     }
-  }, [currentUser]);
-
-  // Load chat key
-  const loadChatKey = useCallback(async (chatId: string): Promise<string> => {
-    let key = localStorage.getItem(`${CHAT_KEY_PREFIX}${chatId}`);
-    if (key) return key;
-    if (currentUser?.uid) {
-      key = await getPersistentChatKey(chatId, currentUser.uid);
-      if (key) {
-        localStorage.setItem(`${CHAT_KEY_PREFIX}${chatId}`, key);
-        return key;
-      }
-    }
-    return '';
-  }, [currentUser]);
-
-  // Handle User Authenticated
-  const handleAuthenticatedUser = useCallback(async (user: any) => {
-    setAuthLoading(true);
-    let profile = await getUserProfile(user.uid);
-
-    // Auto-generate or claim handle
-    if (!profile || !profile.username) {
-      let proposed = '';
-      if (user.displayName) {
-        proposed = user.displayName.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
-      }
-      if (!proposed || proposed.length < 3) {
-        if (user.email) {
-          proposed = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
-        }
-      }
-      if (proposed && proposed.length >= 3) {
-        try {
-          profile = await claimUsername(user.uid, proposed, user.email || '');
-        } catch {
-          // Fallback if handle is taken
-        }
-      }
-    }
-
-    if (!profile || !profile.username) {
-      const fallbackHandle = user.email ? user.email.split('@')[0] : `user_${user.uid.slice(0, 6)}`;
-      setHandleModalInput(fallbackHandle);
-      setCurrentUser({
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        username: ''
-      });
-      setShowHandleModal(true);
-      setAuthLoading(false);
-      return;
-    }
-
-    setCurrentUser({
-      uid: user.uid,
-      email: user.email || (profile as any)?.email || '',
-      displayName: user.displayName || profile.username,
-      username: profile.username
-    });
-    setAuthLoading(false);
   }, []);
 
-  // Listen to Firebase Auth state
+  // Sync Auth State & Redirect Results
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user: any) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user) {
+          await handleAuthSuccess(result.user);
+        }
+      })
+      .catch((err) => {
+        console.warn('Redirect sign in error:', err);
+      });
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        await handleAuthenticatedUser(user);
+        await handleAuthSuccess(user);
       } else {
-        // If not signed into Firebase and not in a demo session
-        setCurrentUser((prev) => (prev?.uid.startsWith('demo_') ? prev : null));
+        const savedDemo = sessionStorage.getItem('duochat_demo_user');
+        if (savedDemo) {
+          try {
+            const parsed = JSON.parse(savedDemo);
+            setCurrentUser(parsed);
+          } catch {
+            setCurrentUser(null);
+          }
+        } else {
+          setCurrentUser(null);
+        }
         setAuthLoading(false);
       }
     });
 
-    // Check redirect credential safely
-    getRedirectResult(auth)
-      .then((cred: any) => {
-        if (cred && cred.user) {
-          handleAuthenticatedUser(cred.user);
-        }
-      })
-      .catch((err: any) => {
-        console.error('Google redirect sign-in failed:', err);
-        setGoogleError(getGoogleAuthMessage(err));
-      });
-
-    return () => unsub();
-  }, [handleAuthenticatedUser]);
-
-  // Subscribe to user's chats
-  useEffect(() => {
-    if (!currentUser?.username) return;
-
-    const unsub = subscribeToUserChats(currentUser.username, (updatedChats: Chat[]) => {
-      setChats(updatedChats);
-    });
-
-    return () => unsub();
-  }, [currentUser?.username]);
-
-  // Subscribe to incoming requests
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-
-    const unsub = subscribeToIncomingRequests(currentUser.uid, (requests: ChatRequest[]) => {
-      setPendingRequests(requests);
-    });
-
-    return () => unsub();
-  }, [currentUser?.uid]);
-
-  // Active chat: Setup Key, Read Receipts, Typing, and Message Stream
-  useEffect(() => {
-    if (!activeChatId || !currentUser) {
-      setCryptoKey(null);
-      setMessages([]);
-      return;
-    }
-
-    let isMounted = true;
-
-    // 1. Get or create encryption key
-    loadChatKey(activeChatId).then(async (keyStr) => {
-      if (!isMounted) return;
-      if (!keyStr) {
-        // Generate new key and persist
-        const newKey = await generateChatKey();
-        persistChatKey(activeChatId, newKey);
-        keyStr = newKey;
-      }
-      try {
-        const imported = await importChatKey(keyStr);
-        if (isMounted) setCryptoKey(imported);
-      } catch (e) {
-        console.error('Failed to import chat key:', e);
-      }
-    });
-
-    // 2. Mark chat as opened
-    recordChatOpened(activeChatId, currentUser.uid);
-
-    // 3. Subscribe to read receipts
-    const unsubReads = subscribeToChatReads(activeChatId, (reads: Record<string, number>) => {
-      if (isMounted) setChatReads(reads);
-    });
-
-    // 4. Subscribe to typing indicator
-    const unsubTyping = subscribeToChatTyping(activeChatId, (typingMap: Record<string, any>) => {
-      if (!isMounted) return;
-      const partnerIsTyping = Object.entries(typingMap).some(([uid, data]) => {
-        return uid !== currentUser.uid && data.isTyping && Date.now() - (data.updatedAt || 0) < 5000;
-      });
-      setPartnerTyping(partnerIsTyping);
-    });
-
     return () => {
-      isMounted = false;
-      unsubReads();
-      unsubTyping();
-      recordUserTyping(activeChatId, currentUser.uid, false);
+      unsubscribeAuth();
     };
-  }, [activeChatId, currentUser, loadChatKey, persistChatKey]);
+  }, []);
 
-  // Decrypt and listen to chat messages
+  // Check URL invite once on mount
   useEffect(() => {
-    if (!activeChatId) return;
+    checkUrlInvite();
+  }, [checkUrlInvite]);
 
-    const unsub = subscribeToChatMessages(activeChatId, async (incomingMsgs: Message[]) => {
-      // Sort chronologically
-      const sorted = [...incomingMsgs].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
-      // Decrypt messages if key is ready
-      if (cryptoKey) {
-        const decryptedList = await Promise.all(
-          sorted.map(async (msg) => {
-            const text = await decryptMessage(cryptoKey, msg.payload);
-            return { ...msg, decryptedText: text };
-          })
-        );
-        setMessages(decryptedList);
-      } else {
-        setMessages(sorted.map((m) => ({ ...m, decryptedText: m.payload })));
+  // Handle successful login
+  const handleAuthSuccess = async (user: any) => {
+    try {
+      const profile = await getUserProfile(user.uid);
+      if (!profile || !profile.username) {
+        setPendingGoogleUser(user);
+        const suggested = (user.displayName || user.email?.split('@')[0] || 'user')
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, '')
+          .slice(0, 18);
+        setHandleModalInput(suggested);
+        setShowHandleModal(true);
+        setAuthLoading(false);
+        return;
       }
-    });
 
-    return () => unsub();
-  }, [activeChatId, cryptoKey]);
-
-  // Auto-scroll messages to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, partnerTyping]);
-
-  const getGoogleAuthMessage = (err: any) => {
-    const code = err?.code || '';
-    const host = window.location.hostname;
-    if (code === 'auth/unauthorized-domain') {
-      return `Google sign-in is blocked for ${host}. In Firebase Console, open Authentication → Settings → Authorized domains and add ${host}.`;
+      setCurrentUser({
+        uid: user.uid,
+        email: user.email || (profile as any)?.email || '',
+        displayName: user.displayName || profile.username,
+        username: profile.username
+      });
+      setAuthLoading(false);
+    } catch (err: any) {
+      console.error('Error fetching profile:', err);
+      setAuthLoading(false);
     }
-    if (code === 'auth/operation-not-allowed') {
-      return 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Authentication → Sign-in method.';
-    }
-    if (code === 'auth/popup-blocked') {
-      return 'Your browser blocked the Google sign-in popup. Use Continue with redirect below.';
-    }
-    if (code === 'auth/popup-closed-by-user') {
-      return 'The Google sign-in window was closed before sign-in completed.';
-    }
-    return (err?.message || 'Google sign-in failed. Please try again.').replace('Firebase: ', '');
   };
 
-  // Google-only sign-in
+  // Google Sign In (Popup with Redirect Fallback)
   const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
     setGoogleError('');
     setShowRedirectOption(false);
-    setGoogleLoading(true);
     try {
-      const res = await signInWithPopup(auth, googleProvider);
-      if (res && res.user) {
-        await handleAuthenticatedUser(res.user);
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        await handleAuthSuccess(result.user);
       }
     } catch (err: any) {
-      console.error('Google Sign-in error:', err);
-      if (err?.code === 'auth/popup-blocked') {
-        setGoogleError(getGoogleAuthMessage(err));
+      console.error('Google Sign In Error:', err);
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
+        setGoogleError('Popup was blocked by your browser. You can continue using direct redirect.');
         setShowRedirectOption(true);
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setGoogleError(
+          `Domain not authorized in Firebase Auth. Ensure your current domain is added in Firebase Console > Authentication > Settings > Authorized Domains.`
+        );
       } else {
-        setGoogleError(getGoogleAuthMessage(err));
+        setGoogleError(err.message || 'Unable to sign in with Google.');
       }
     } finally {
       setGoogleLoading(false);
@@ -435,186 +421,523 @@ export default function App() {
   };
 
   const handleGoogleRedirect = async () => {
-    setGoogleError('');
-    setShowRedirectOption(false);
     setGoogleLoading(true);
+    setGoogleError('');
     try {
       await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
-      console.error('Google redirect sign-in failed:', err);
-      setGoogleError(getGoogleAuthMessage(err));
+      setGoogleError(err.message || 'Unable to redirect.');
       setGoogleLoading(false);
     }
   };
 
-  // Handle Modal Submit
+  // 1-Click Instant Demo Login (Zero friction testing)
+  const handleDemoSignIn = async () => {
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const demoHandle = `tester_${randomSuffix}`;
+    const demoUser: UserProfile = {
+      uid: `demo_${demoHandle}`,
+      username: demoHandle,
+      email: `${demoHandle}@duochat.local`,
+      displayName: `Tester ${randomSuffix}`
+    };
+    try {
+      await claimUsername(demoUser.uid, demoHandle, demoUser.email);
+    } catch (e) {
+      console.warn('Demo claim note:', e);
+    }
+    sessionStorage.setItem('duochat_demo_user', JSON.stringify(demoUser));
+    setCurrentUser(demoUser);
+    showToast(`Signed in as @${demoHandle}`);
+  };
+
+  // Sign Out
+  const handleSignOut = async () => {
+    sessionStorage.removeItem('duochat_demo_user');
+    await fbSignOut(auth).catch(() => {});
+    setCurrentUser(null);
+    setChats([]);
+    setActiveChatId('');
+    setMessages([]);
+    showToast('Signed out.');
+  };
+
+  // Claim Unique Handle Modal
   const handleClaimModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setHandleModalError('');
-    const chosen = handleModalInput.trim().toLowerCase();
-    if (!chosen || !/^[a-z0-9_]{3,24}$/.test(chosen)) {
-      setHandleModalError('Must be 3-24 characters, letters, numbers, or underscores.');
+    if (!pendingGoogleUser) return;
+    const cleanHandle = handleModalInput.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,24}$/.test(cleanHandle)) {
+      setHandleModalError('Handle must be 3-24 characters: letters, numbers, and underscores.');
       return;
     }
+    setHandleModalError('');
     try {
-      if (!currentUser?.uid) return;
-      await claimUsername(currentUser.uid, chosen, currentUser.email || '');
-      setCurrentUser((prev) => (prev ? { ...prev, username: chosen } : null));
+      await claimUsername(pendingGoogleUser.uid, cleanHandle, pendingGoogleUser.email);
+      setCurrentUser({
+        uid: pendingGoogleUser.uid,
+        email: pendingGoogleUser.email,
+        displayName: pendingGoogleUser.displayName || cleanHandle,
+        username: cleanHandle
+      });
       setShowHandleModal(false);
-      showToast(`Handle set to @${chosen}`);
+      setPendingGoogleUser(null);
+      showToast(`Welcome to DuoChat, @${cleanHandle}!`);
     } catch (err: any) {
-      setHandleModalError(err.message || 'Could not claim handle');
+      setHandleModalError(err.message || 'That handle is already taken. Try another.');
     }
   };
 
-  // Sign out
-  const handleSignOut = async () => {
-    try {
-      await fbSignOut(auth);
-    } catch (e) {
-      console.warn('Signout notice:', e);
+  // Real-Time Subscriptions: Chats & Incoming Requests
+  useEffect(() => {
+    if (!currentUser?.username) return;
+
+    const unsubChats = subscribeToUserChats(currentUser.username, (loadedChats: Chat[]) => {
+      setChats(loadedChats);
+      if (activeChatId && !loadedChats.some((c: Chat) => c.id === activeChatId)) {
+        // Chat was deleted by the other person
+        setActiveChatId('');
+        setMobileConversationOpen(false);
+        showToast('This conversation was closed.');
+      }
+    });
+
+    const unsubRequests = subscribeToIncomingRequests(currentUser.username, (requests: ChatRequest[]) => {
+      setPendingRequests(requests);
+    });
+
+    return () => {
+      unsubChats();
+      unsubRequests();
+    };
+  }, [currentUser?.username, activeChatId, showToast]);
+
+  // Active Chat Encryption Key & Message Subscriptions
+  useEffect(() => {
+    if (!activeChatId || !currentUser?.username) {
+      setCryptoKey(null);
+      setMessages([]);
+      return;
     }
-    setCurrentUser(null);
-    setActiveChatId('');
-    setChats([]);
-    setMessages([]);
-    setMobileConversationOpen(false);
+
+    let unsubMessages = () => {};
+    let unsubReads = () => {};
+    let unsubTyping = () => {};
+
+    const loadKeyAndMessages = async () => {
+      try {
+        const storedKey = localStorage.getItem(`${CHAT_KEY_PREFIX}${activeChatId}`);
+        let keyBase64 = storedKey;
+
+        if (!keyBase64) {
+          keyBase64 = await getPersistentChatKey(activeChatId, currentUser.uid);
+          if (keyBase64) {
+            localStorage.setItem(`${CHAT_KEY_PREFIX}${activeChatId}`, keyBase64);
+          }
+        }
+
+        if (keyBase64) {
+          const key = await importChatKey(keyBase64);
+          setCryptoKey(key);
+          setHasCryptoKey(true);
+
+          unsubMessages = subscribeToChatMessages(activeChatId, async (newMsg: any) => {
+            const decrypted = await decryptMessage(key, newMsg.text);
+            const msgObj: Message = {
+              id: newMsg.id,
+              chatId: activeChatId,
+              sender: newMsg.sender,
+              payload: newMsg.text,
+              decryptedText: decrypted,
+              timestamp: newMsg.ts
+            };
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === msgObj.id)) return prev;
+              return [...prev, msgObj].sort((a, b) => a.timestamp - b.timestamp);
+            });
+            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 60);
+          });
+        } else {
+          setHasCryptoKey(false);
+          setCryptoKey(null);
+        }
+
+        await recordChatOpened(activeChatId, currentUser.username);
+
+        unsubReads = subscribeToChatReads(activeChatId, (reads: { [username: string]: number }) => {
+          setChatReads(reads);
+        });
+
+        unsubTyping = subscribeToChatTyping(activeChatId, (typingUsers: { [username: string]: boolean }) => {
+          const activeChatObj = chats.find((c) => c.id === activeChatId);
+          if (!activeChatObj) return;
+          const other = activeChatObj.members.find((m) => m !== currentUser.username);
+          if (other && typingUsers[other]) {
+            setPartnerTyping(true);
+          } else {
+            setPartnerTyping(false);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to set up chat session:', err);
+      }
+    };
+
+    loadKeyAndMessages();
+
+    return () => {
+      unsubMessages();
+      unsubReads();
+      unsubTyping();
+    };
+  }, [activeChatId, currentUser?.username, currentUser?.uid, chats]);
+
+  // Room Invite Countdown Timer
+  useEffect(() => {
+    if (!activeInvite || activeInvite.status !== 'pending') return;
+
+    const tick = () => {
+      const remaining = activeInvite.expiresAt - Date.now();
+      if (remaining <= 0) {
+        setInviteTimeRemaining(0);
+        showToast('Invite expired.');
+        setActiveInvite(null);
+        setShowInviteModal(false);
+      } else {
+        setInviteTimeRemaining(remaining);
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [activeInvite, showToast]);
+
+  // Real-Time Listener on Created Room Invite
+  useEffect(() => {
+    if (!activeInvite?.code || !currentUser?.username) return;
+
+    const unsub = subscribeToRoomInvite(activeInvite.code, async (updatedInvite: any) => {
+      if (!updatedInvite) return;
+      if (updatedInvite.status === 'accepted') {
+        const partner = updatedInvite.acceptedByUsername || 'friend';
+        showToast(`@${partner} accepted your invite!`);
+        setShowInviteModal(false);
+        setActiveInvite(null);
+
+        // Open chat immediately
+        setActiveInboxTab('messages');
+        setActiveChatId(updatedInvite.chatId);
+        setMobileConversationOpen(true);
+      }
+    });
+
+    return () => unsub();
+  }, [activeInvite?.code, currentUser?.username, showToast]);
+
+  // CREATE 12-DIGIT ROOM INVITE
+  const handleStartInvite = async () => {
+    if (!currentUser?.username) return;
+    try {
+      const codeNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+      const keyText = await generateChatKey();
+      const chatId = `duo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins
+
+      // Save key locally and to Firestore for creator
+      localStorage.setItem(`${CHAT_KEY_PREFIX}${chatId}`, keyText);
+      await savePersistentChatKey(chatId, currentUser.uid, keyText);
+
+      // Create initial chat placeholder
+      const chat: Chat = {
+        id: chatId,
+        members: [currentUser.username],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      await saveFirestoreChat(chat);
+
+      // Save Room Invite record
+      const inviteData: RoomInvite = {
+        code: codeNumber,
+        creatorUid: currentUser.uid,
+        creatorUsername: currentUser.username,
+        chatId,
+        chatKey: keyText,
+        expiresAt,
+        status: 'pending'
+      };
+      await createRoomInvite(inviteData);
+
+      setActiveInvite(inviteData);
+      setShowInviteModal(true);
+    } catch (err: any) {
+      showToast(err.message || 'Could not create invite.');
+    }
+  };
+
+  // CANCEL ROOM INVITE
+  const handleCancelInvite = async () => {
+    if (!activeInvite) return;
+    try {
+      await cancelRoomInvite(activeInvite.code);
+      setActiveInvite(null);
+      setShowInviteModal(false);
+      showToast('Invite cancelled.');
+    } catch (err: any) {
+      showToast(err.message || 'Could not cancel invite.');
+    }
+  };
+
+  // ACCEPT INVITE BY 12-DIGIT NUMBER & KEY
+  const handleJoinByInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser?.username) return;
+    setJoinError('');
+    setJoiningChat(true);
+
+    const cleanCode = joinCodeInput.replace(/\D/g, '').trim();
+    const cleanKey = joinKeyInput.trim();
+
+    if (cleanCode.length !== 12) {
+      setJoinError('Please enter a valid 12-digit invite number.');
+      setJoiningChat(false);
+      return;
+    }
+    if (!cleanKey) {
+      setJoinError('Please provide the encryption key.');
+      setJoiningChat(false);
+      return;
+    }
+
+    try {
+      // Validate key length
+      await importChatKey(cleanKey);
+
+      const invite = await acceptRoomInvite(cleanCode, currentUser.uid, currentUser.username);
+      if (!invite) throw new Error('Invite not found.');
+
+      // Save key locally and in Firestore for current user
+      localStorage.setItem(`${CHAT_KEY_PREFIX}${invite.chatId}`, cleanKey);
+      await savePersistentChatKey(invite.chatId, currentUser.uid, cleanKey);
+
+      // Update members in chat
+      const chat: Chat = {
+        id: invite.chatId,
+        members: [invite.creatorUsername, currentUser.username],
+        updatedAt: Date.now()
+      };
+      await saveFirestoreChat(chat);
+
+      setShowJoinModal(false);
+      setJoinCodeInput('');
+      setJoinKeyInput('');
+      setActiveInboxTab('messages');
+      setActiveChatId(invite.chatId);
+      setMobileConversationOpen(true);
+      showToast(`Connected with @${invite.creatorUsername}!`);
+    } catch (err: any) {
+      setJoinError(err.message || 'Unable to join invite.');
+    } finally {
+      setJoiningChat(false);
+    }
   };
 
   // Send Message
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const text = messageText.trim();
-    if (!text || !activeChatId || !currentUser) return;
+    if (!text || !activeChatId || !currentUser?.username || !cryptoKey) return;
 
     setMessageText('');
-    recordUserTyping(activeChatId, currentUser.uid, false);
+    setEmojiQuery(null);
+
+    // Stop typing status
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      await recordUserTyping(activeChatId, currentUser.username, false);
+    }
 
     try {
-      let payload = text;
-      if (cryptoKey) {
-        payload = await encryptMessage(cryptoKey, text);
-      }
-
-      await saveFirestoreMessage(activeChatId, {
+      const encrypted = await encryptMessage(cryptoKey, text);
+      const tempId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const msg: Message = {
+        id: tempId,
         chatId: activeChatId,
         sender: currentUser.username,
-        payload,
+        payload: encrypted,
+        decryptedText: text,
         timestamp: Date.now()
-      });
+      };
 
-      // Update chat's last message
-      const activeChat = chats.find((c) => c.id === activeChatId);
-      if (activeChat) {
-        await saveFirestoreChat({
-          ...activeChat,
-          lastMessage: text,
-          lastMessageSender: currentUser.username,
-          lastMessageTimestamp: Date.now(),
-          updatedAt: Date.now()
-        });
-      }
+      setMessages((prev) => [...prev, msg]);
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+
+      await saveFirestoreMessage(activeChatId, {
+        id: tempId,
+        sender: currentUser.username,
+        text: encrypted,
+        ts: Date.now()
+      });
     } catch (err: any) {
-      console.error('Error sending message:', err);
-      showToast('Could not send message. Please retry.');
+      console.error('Send error:', err);
+      showToast('Could not send encrypted message.');
     }
   };
 
-  // Typing Input Handler
+  // Textarea input and Emoji Autocomplete Detection
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
+    const caret = e.target.selectionStart;
     setMessageText(val);
 
-    if (!activeChatId || !currentUser) return;
-
-    const now = Date.now();
-    if (val.trim().length > 0) {
-      if (now - lastTypingSentRef.current > 2000) {
-        recordUserTyping(activeChatId, currentUser.uid, true);
-        lastTypingSentRef.current = now;
-      }
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = window.setTimeout(() => {
-        recordUserTyping(activeChatId, currentUser.uid, false);
-      }, 3000);
+    // Detect :emoji query
+    const beforeCaret = val.slice(0, caret);
+    const colonMatch = beforeCaret.match(/:([a-zA-Z0-9_]{1,15})$/);
+    if (colonMatch) {
+      setEmojiQuery({
+        query: colonMatch[1],
+        startIndex: caret - colonMatch[0].length
+      });
+      setActiveEmojiIndex(0);
     } else {
-      recordUserTyping(activeChatId, currentUser.uid, false);
+      setEmojiQuery(null);
+    }
+
+    // Typing debouncing
+    if (activeChatId && currentUser?.username) {
+      if (!isTypingRef.current) {
+        isTypingRef.current = true;
+        recordUserTyping(activeChatId, currentUser.username, true);
+      }
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        isTypingRef.current = false;
+        recordUserTyping(activeChatId, currentUser.username, false);
+      }, 2500);
     }
   };
 
-  // Load registered users for modal
+  // Insert Emoji from Autocomplete
+  const insertSelectedEmoji = (item: EmojiItem) => {
+    if (!emojiQuery || !textareaRef.current) return;
+    const { startIndex } = emojiQuery;
+    const before = messageText.slice(0, startIndex);
+    const caret = textareaRef.current.selectionStart;
+    const after = messageText.slice(caret);
+    const newText = `${before}${item.emoji} ${after}`;
+    setMessageText(newText);
+    setEmojiQuery(null);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newPos = before.length + item.emoji.length + 1;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newPos, newPos);
+      }
+    }, 10);
+  };
+
+  // Handle Keys in Composer
+  const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (emojiQuery && matchingEmojis.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveEmojiIndex((prev) => (prev + 1) % matchingEmojis.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveEmojiIndex((prev) => (prev - 1 + matchingEmojis.length) % matchingEmojis.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertSelectedEmoji(matchingEmojis[activeEmojiIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setEmojiQuery(null);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // Copy helper
+  const copyTextToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`Copied ${label} to clipboard`);
+    } catch {
+      showToast('Clipboard access unavailable.');
+    }
+  };
+
+  // User Discovery / New Chat
   const loadUsers = async () => {
     setLoadingUsers(true);
     try {
-      const list = await getAllRegisteredUsers(currentUser?.uid || '');
-      setRegisteredUsers(list);
-    } catch (err) {
-      console.warn('Failed to load users:', err);
+      const list = await getAllRegisteredUsers();
+      setRegisteredUsers(list.filter((u) => u.username !== currentUser?.username));
+    } catch (err: any) {
+      setNewChatError(err.message || 'Could not load users.');
     } finally {
       setLoadingUsers(false);
     }
   };
 
   const openNewChat = () => {
-    setShowNewChatModal(true);
     setNewChatError('');
+    setUserSearchTerm('');
+    setShowNewChatModal(true);
     loadUsers();
   };
 
-  // Start chat with user directly
-  const handleStartChatWithUser = async (targetUser: RegisteredUser) => {
+  const handleStartChatWithUser = async (user: RegisteredUser) => {
     if (!currentUser?.username) return;
-    setNewChatError('');
-
     try {
-      // Check if chat already exists
-      const existing = chats.find((c) => c.members.includes(targetUser.username));
+      const existing = chats.find((c) => c.members.includes(user.username));
       if (existing) {
-        setActiveChatId(existing.id);
         setShowNewChatModal(false);
+        setActiveChatId(existing.id);
         setMobileConversationOpen(true);
         return;
       }
 
-      // Create new chat
-      const chatId = `chat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const keyStr = await generateChatKey();
-      persistChatKey(chatId, keyStr);
+      const keyText = await generateChatKey();
+      const chatId = `dm_${[currentUser.username, user.username].sort().join('_')}`;
 
-      const newChat: Chat = {
-        id: chatId,
-        members: [currentUser.username, targetUser.username],
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
+      localStorage.setItem(`${CHAT_KEY_PREFIX}${chatId}`, keyText);
+      await savePersistentChatKey(chatId, currentUser.uid, keyText);
 
-      await saveFirestoreChat(newChat);
-
-      // Send request to target user
       await sendDirectChatRequest({
         senderUid: currentUser.uid,
         senderUsername: currentUser.username,
-        recipientUid: targetUser.uid,
-        recipientUsername: targetUser.username,
+        recipientUid: user.uid,
+        recipientUsername: user.username,
         chatId,
-        chatKey: keyStr
+        chatKey: keyText
       });
 
       setShowNewChatModal(false);
-      setActiveChatId(chatId);
-      setMobileConversationOpen(true);
-      showToast(`Chat request sent to @${targetUser.username}!`);
+      showToast(`Encrypted request sent to @${user.username}`);
     } catch (err: any) {
-      setNewChatError(err.message || 'Could not start conversation.');
+      setNewChatError(err.message || 'Failed to start conversation.');
     }
   };
 
   // Accept DM request
   const handleAcceptRequest = async (req: ChatRequest) => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.username) return;
     try {
-      await acceptDirectChatRequest(req, currentUser.uid);
-      persistChatKey(req.chatId, req.chatKey);
+      await acceptDirectChatRequest(req.id);
+      localStorage.setItem(`${CHAT_KEY_PREFIX}${req.chatId}`, req.chatKey);
+      await savePersistentChatKey(req.chatId, currentUser.uid, req.chatKey);
 
       let chat = chats.find((c) => c.id === req.chatId);
       if (!chat) {
@@ -655,7 +978,7 @@ export default function App() {
       setActiveChatId('');
       setMobileConversationOpen(false);
       setShowDeleteModal(false);
-      showToast('Conversation deleted.');
+      showToast('Conversation deleted for both people.');
     } catch (err: any) {
       showToast(err.message || 'Could not delete conversation.');
     }
@@ -668,17 +991,18 @@ export default function App() {
     return activeChat.members.find((m) => m !== currentUser.username) || activeChat.members[0];
   }, [activeChat, currentUser?.username]);
 
-  // Filtered chats
+  // Filtered chats (by partner username or preview)
   const visibleChats = useMemo(() => {
     if (!currentUser?.username) return [];
     const term = searchFilter.trim().toLowerCase();
     return chats.filter((c) => {
       const partner = c.members.find((m) => m !== currentUser.username) || '';
-      return partner.toLowerCase().includes(term);
+      const preview = c.lastMessage || '';
+      return partner.toLowerCase().includes(term) || preview.toLowerCase().includes(term);
     });
   }, [chats, searchFilter, currentUser?.username]);
 
-  // Filtered suggested users
+  // Filtered registered users
   const visibleUsers = useMemo(() => {
     const term = userSearchTerm.trim().toLowerCase();
     return registeredUsers.filter((u) => u.username.toLowerCase().includes(term));
@@ -690,7 +1014,7 @@ export default function App() {
       <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', background: '#0b1217', color: '#a6efc5' }}>
         <div style={{ textAlign: 'center' }}>
           <div className="brand-mark" style={{ margin: '0 auto 16px', width: 48, height: 48, fontSize: 28 }}>✳</div>
-          <p style={{ letterSpacing: '0.1em', fontSize: 13 }}>CONNECTING TO DUOCHAT...</p>
+          <p style={{ letterSpacing: '0.1em', fontSize: 13, textTransform: 'uppercase' }}>Connecting to DuoChat...</p>
         </div>
       </div>
     );
@@ -709,7 +1033,7 @@ export default function App() {
           <h1>Good conversations<br />start here.</h1>
           <p className="auth-description">Sign in with Google to get back to your space. Just you, your person, and the conversation.</p>
 
-          {/* Google Sign In */}
+          {/* Primary Google Sign In */}
           <button
             className="google-auth-button"
             type="button"
@@ -726,13 +1050,20 @@ export default function App() {
             <span>{googleLoading ? 'Connecting to Google...' : 'Continue with Google'}</span>
           </button>
 
-          {googleError && <p className="form-error google-error" role="alert">{googleError}</p>}
+          {googleError && <p className="google-error" role="alert">{googleError}</p>}
           {showRedirectOption && (
             <button className="secondary redirect-button" type="button" onClick={handleGoogleRedirect} disabled={googleLoading}>
               Continue with redirect
             </button>
           )}
-          <p className="login-note">Secured with Google and Firebase Authentication. Messages are encrypted on-device.</p>
+
+          {/* Quick Demo Test Option */}
+          <div className="demo-login-divider"><span>or explore instant demo</span></div>
+          <button className="demo-auth-button" type="button" onClick={handleDemoSignIn}>
+            <span>⚡ Instant Demo Account</span>
+          </button>
+
+          <p className="login-note">Secured with Firebase Authentication & on-device AES-GCM 256-bit encryption.</p>
         </main>
 
         {/* Claim Handle Modal */}
@@ -764,7 +1095,7 @@ export default function App() {
   // Authenticated: Main Chat Application
   return (
     <div className={`chat-app ${mobileConversationOpen ? 'conversation-open' : ''}`}>
-      {/* Sidebar / Inboxes */}
+      {/* Sidebar */}
       <aside className="sidebar">
         <header className="sidebar-header">
           <div className="user-profile-summary">
@@ -775,9 +1106,10 @@ export default function App() {
             </div>
           </div>
           <div className="sidebar-header-actions">
-            <button className="icon-button" type="button" onClick={openNewChat} title="New Conversation">
+            <button className="icon-button" type="button" onClick={openNewChat} title="Search users">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14"/>
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </button>
             <button className="icon-button" type="button" onClick={handleSignOut} title="Sign Out">
@@ -787,6 +1119,16 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {/* Action Buttons: Start Invite & Join with Number */}
+        <div className="sidebar-action-buttons">
+          <button className="primary" type="button" onClick={handleStartInvite} title="Create private 12-digit invite">
+            + Start an invite
+          </button>
+          <button className="secondary" type="button" onClick={() => { setJoinError(''); setShowJoinModal(true); }} title="Join an invite using number">
+            Join with number
+          </button>
+        </div>
 
         {/* Tab Navigation */}
         <div className="tab-nav">
@@ -810,9 +1152,12 @@ export default function App() {
 
         {/* Search */}
         <div className="search-wrap">
+          <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
           <input
-            className="chat-search"
-            placeholder="Search conversations..."
+            placeholder="Search chats or messages..."
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
           />
@@ -824,9 +1169,14 @@ export default function App() {
             {visibleChats.length === 0 ? (
               <div className="list-empty">
                 <p>No conversations yet.</p>
-                <button className="secondary" type="button" onClick={openNewChat} style={{ fontSize: 12, marginTop: 8 }}>
-                  Start a conversation
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+                  <button className="primary" type="button" onClick={handleStartInvite} style={{ fontSize: 11, minHeight: 32 }}>
+                    Start an invite
+                  </button>
+                  <button className="secondary" type="button" onClick={openNewChat} style={{ fontSize: 11, minHeight: 32 }}>
+                    Find user handle
+                  </button>
+                </div>
               </div>
             ) : (
               visibleChats.map((c) => {
@@ -894,23 +1244,40 @@ export default function App() {
             )}
           </div>
         )}
+
+        {/* Sidebar Footer */}
+        <div className="sidebar-foot">
+          <span>SIGNED IN AS</span>
+          <strong>@{currentUser.username}</strong>
+          <div className="secure-label">
+            <i></i>
+            <span>End-to-End Encrypted</span>
+          </div>
+        </div>
       </aside>
 
       {/* Main Conversation View */}
       <section className="conversation">
         {!activeChatId ? (
           <div className="empty-state">
-            <div className="empty-state-card">
-              <span className="brand-mark" style={{ margin: '0 auto 16px' }}>✳</span>
-              <h2>Your Private Space</h2>
-              <p>End-to-end encrypted messaging directly between two people. Messages stay strictly on-device.</p>
-              <button className="primary" type="button" onClick={openNewChat}>
-                Start a new conversation
-              </button>
+            <div className="empty-content">
+              <div className="empty-mark">✳</div>
+              <p className="eyebrow">A PRIVATE CORNER FOR TWO</p>
+              <h2>Very exclusive.<br />Two seats.</h2>
+              <p>Start an invite, then wait for the other person to say yes. The room does not exist until they accept.</p>
+              <div className="empty-actions">
+                <button className="primary" type="button" onClick={handleStartInvite}>
+                  + Start an invite
+                </button>
+                <button className="secondary" type="button" onClick={() => { setJoinError(''); setShowJoinModal(true); }}>
+                  Join with number
+                </button>
+              </div>
+              <span className="empty-note">🔒 Messages are encrypted on-device. No plain text touches the server.</span>
             </div>
           </div>
         ) : (
-          <div className="active-chat-container">
+          <div className="active-chat">
             {/* Conversation Header */}
             <header className="chat-header">
               <button
@@ -928,23 +1295,45 @@ export default function App() {
                   {partnerTyping ? 'typing...' : 'End-to-End Encrypted'}
                 </span>
               </div>
-              <div className="header-actions">
+              <div className="header-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button
-                  className="delete-button text-button"
+                  className="icon-button invite-button"
+                  type="button"
+                  onClick={async () => {
+                    const key = localStorage.getItem(`${CHAT_KEY_PREFIX}${activeChatId}`);
+                    if (key) {
+                      const link = `${window.location.origin}${window.location.pathname}#key=${encodeURIComponent(key)}`;
+                      await copyTextToClipboard(link, 'Secure invite link');
+                    } else {
+                      showToast('Encryption key unavailable.');
+                    }
+                  }}
+                  title="Copy room link & key"
+                >
+                  Share
+                </button>
+                <button
+                  className="text-button delete-button"
                   type="button"
                   onClick={() => setShowDeleteModal(true)}
-                  title="Delete conversation"
+                  title="Delete conversation for both"
                 >
-                  Delete chat
+                  Delete
                 </button>
               </div>
             </header>
 
             {/* Message Stream */}
             <div className="message-list">
-              <div className="key-warning">
-                🔒 Messages are secured with AES-GCM 256-bit on-device encryption. Only you and @{partnerUsername} hold the decryption keys.
-              </div>
+              {!hasCryptoKey ? (
+                <div className="key-warning">
+                  ⚠️ This device does not hold the encryption key for this chat. Ask your friend to share the room link.
+                </div>
+              ) : (
+                <div className="key-warning">
+                  🔒 Messages are encrypted with AES-GCM 256-bit on-device encryption. Only you and @{partnerUsername} can read them.
+                </div>
+              )}
 
               {messages.map((msg) => {
                 const isMine = msg.sender === currentUser.username;
@@ -978,9 +1367,9 @@ export default function App() {
 
               {partnerTyping && (
                 <div className="message-row">
-                  <div className="message-bubble" style={{ color: 'var(--muted)', fontStyle: 'italic', display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div className="message-bubble" style={{ color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span>@{partnerUsername} is typing</span>
-                    <span className="pulse-dot" style={{ width: 5, height: 5 }}></span>
+                    <span className="pulse-dot" style={{ width: 6, height: 6 }}></span>
                   </div>
                 </div>
               )}
@@ -988,29 +1377,149 @@ export default function App() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Composer */}
-            <form className="composer" onSubmit={handleSendMessage}>
-              <textarea
-                placeholder="Type an encrypted message..."
-                value={messageText}
-                onChange={handleInputChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                rows={1}
-              />
-              <button className="primary send-button" type="submit" disabled={!messageText.trim()}>
-                Send <span>↗</span>
-              </button>
-            </form>
+            {/* Composer with Emoji Suggestions */}
+            <div className="composer-wrapper">
+              {/* Emoji Suggestions Panel */}
+              {matchingEmojis.length > 0 && (
+                <div className="emoji-suggestions" role="listbox" aria-label="Emoji suggestions">
+                  {matchingEmojis.map((item, idx) => (
+                    <button
+                      key={item.shortcode}
+                      className={`emoji-option ${idx === activeEmojiIndex ? 'selected' : ''}`}
+                      type="button"
+                      onClick={() => insertSelectedEmoji(item)}
+                    >
+                      <span className="emoji-glyph">{item.emoji}</span>
+                      <span className="emoji-name">{item.shortcode}</span>
+                      <span className="emoji-shortcode">:{item.shortcode}:</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <form className="composer" onSubmit={handleSendMessage}>
+                <textarea
+                  ref={textareaRef}
+                  placeholder="Type an encrypted message... (type : for emoji)"
+                  value={messageText}
+                  onChange={handleInputChange}
+                  onKeyDown={handleComposerKeyDown}
+                  rows={1}
+                />
+                <button className="primary send-button" type="submit" disabled={!messageText.trim()}>
+                  Send <span>↗</span>
+                </button>
+              </form>
+            </div>
           </div>
         )}
       </section>
 
-      {/* New Conversation Modal */}
+      {/* 12-Digit Room Invite Modal */}
+      {showInviteModal && activeInvite && (
+        <dialog className="modal" open style={{ display: 'block' }}>
+          <div className="modal-content">
+            <button className="modal-close" type="button" onClick={() => setShowInviteModal(false)}>×</button>
+            <p className="section-label">EXCLUSIVE ROOM</p>
+            <h2>Your Private Invite</h2>
+            <p className="modal-copy">Give this 12-digit number to your friend, or send the secure link. The room will be created the moment they accept.</p>
+
+            <div className="invite-code">
+              {activeInvite.code.replace(/(\d{4})/g, '$1 ').trim()}
+            </div>
+            <p className="invite-expiry">
+              Expires in {formatDuration(inviteTimeRemaining)} · one yes, one new chat
+            </p>
+
+            <input
+              className="invite-link"
+              readOnly
+              value={`${window.location.origin}${window.location.pathname}?invite=${activeInvite.code}#key=${encodeURIComponent(activeInvite.chatKey)}`}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+
+            <div className="modal-actions">
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => copyTextToClipboard(activeInvite.code, 'Invite number')}
+              >
+                Copy number
+              </button>
+              <button
+                className="primary"
+                type="button"
+                onClick={() =>
+                  copyTextToClipboard(
+                    `${window.location.origin}${window.location.pathname}?invite=${activeInvite.code}#key=${encodeURIComponent(activeInvite.chatKey)}`,
+                    'Secure invite link'
+                  )
+                }
+              >
+                Copy secure link
+              </button>
+            </div>
+
+            <div className="waiting-state">
+              <span className="pulse-dot"></span>
+              <span>Invite sent. Your chat is practicing its hello. Waiting for your friend to accept...</span>
+            </div>
+
+            <button className="cancel-invite" type="button" onClick={handleCancelInvite}>
+              Cancel invite
+            </button>
+          </div>
+        </dialog>
+      )}
+
+      {/* Accept Invite / Join with Number Modal */}
+      {showJoinModal && (
+        <dialog className="modal" open style={{ display: 'block' }}>
+          <form className="modal-content" onSubmit={handleJoinByInviteSubmit}>
+            <button className="modal-close" type="button" onClick={() => setShowJoinModal(false)}>×</button>
+            <p className="section-label">ACCEPT AN INVITE</p>
+            <h2>Join with number</h2>
+            <p className="modal-copy">Enter the 12-digit number and encryption key. The private room is created when you accept.</p>
+
+            <div className="modal-field">
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>12-Digit Invite Number</label>
+              <input
+                className="auth-input code-input"
+                inputMode="numeric"
+                maxLength={14}
+                placeholder="0000 0000 0000"
+                value={joinCodeInput}
+                onChange={(e) => setJoinCodeInput(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="modal-field" style={{ marginTop: 12 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Encryption Key</label>
+              <input
+                className="auth-input"
+                placeholder="Paste key from secure link"
+                value={joinKeyInput}
+                onChange={(e) => setJoinKeyInput(e.target.value)}
+                required
+              />
+            </div>
+
+            {joinError && <p className="form-error" style={{ marginTop: 12 }}>{joinError}</p>}
+
+            <div className="modal-actions" style={{ marginTop: 20 }}>
+              <button className="secondary" type="button" onClick={() => setShowJoinModal(false)}>
+                Cancel
+              </button>
+              <button className="primary" type="submit" disabled={joiningChat}>
+                {joiningChat ? 'Connecting...' : 'Accept invite'}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      )}
+
+      {/* New Conversation Modal (Search Users) */}
       {showNewChatModal && (
         <dialog className="modal" open style={{ display: 'block' }}>
           <div className="modal-content">
@@ -1027,27 +1536,44 @@ export default function App() {
               autoFocus
             />
 
-            <div className="suggested-header" style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Registered Users</span>
-              <button className="text-button" type="button" onClick={loadUsers}>Refresh</button>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>REGISTERED USERS</span>
+              <button className="text-button" type="button" onClick={loadUsers} style={{ fontSize: 11 }}>Refresh</button>
             </div>
 
-            <div className="suggested-users-list" role="list" style={{ marginTop: 8, maxHeight: 220, overflowY: 'auto' }}>
+            <div style={{ marginTop: 8, maxHeight: 220, overflowY: 'auto' }} role="list">
               {loadingUsers ? (
                 <div className="list-empty">Loading users...</div>
               ) : visibleUsers.length === 0 ? (
                 <div className="list-empty">No users found.</div>
               ) : (
                 visibleUsers.map((u) => (
-                  <div key={u.uid} className="suggested-user-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div
+                    key={u.uid}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 0',
+                      borderBottom: '1px solid var(--line)'
+                    }}
+                    role="listitem"
+                  >
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      <div className="avatar" style={{ width: 34, height: 34, fontSize: 12 }}>{u.username.slice(0, 2).toUpperCase()}</div>
+                      <div className="avatar" style={{ width: 34, height: 34, fontSize: 12 }}>
+                        {u.username.slice(0, 2).toUpperCase()}
+                      </div>
                       <div>
                         <strong>@{u.username}</strong>
                         {u.email && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{u.email}</div>}
                       </div>
                     </div>
-                    <button className="primary" type="button" onClick={() => handleStartChatWithUser(u)} style={{ minHeight: 32, fontSize: 12, padding: '0 12px' }}>
+                    <button
+                      className="primary"
+                      type="button"
+                      onClick={() => handleStartChatWithUser(u)}
+                      style={{ minHeight: 32, fontSize: 11, padding: '0 12px' }}
+                    >
                       Chat
                     </button>
                   </div>

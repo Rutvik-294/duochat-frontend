@@ -50,6 +50,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Room Invites (12-digit number invite codes)
+    match /invites/{code} {
+      allow read, write: if true;
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

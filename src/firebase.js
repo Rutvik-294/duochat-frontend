@@ -405,6 +405,90 @@ export async function deleteFirestoreChat(chatId) {
   }
 }
 
+/**
+ * Create a 12-digit room invite
+ */
+export async function createRoomInvite(inviteData) {
+  if (!inviteData || !inviteData.code) return;
+  const inviteRef = doc(db, "invites", inviteData.code);
+  await setDoc(inviteRef, {
+    ...inviteData,
+    status: 'pending',
+    createdAt: Date.now()
+  });
+}
+
+/**
+ * Fetch a room invite by code
+ */
+export async function getRoomInvite(code) {
+  if (!code) return null;
+  const snap = await getDoc(doc(db, "invites", code.trim()));
+  return snap.exists() ? snap.data() : null;
+}
+
+/**
+ * Real-time subscription to an invite
+ */
+export function subscribeToRoomInvite(code, onUpdate) {
+  if (!code) return () => {};
+  return onSnapshot(doc(db, "invites", code.trim()), (snap) => {
+    if (snap.exists()) {
+      onUpdate(snap.data());
+    } else {
+      onUpdate(null);
+    }
+  }, (err) => {
+    console.warn("Error subscribing to invite:", err);
+  });
+}
+
+/**
+ * Accept a room invite
+ */
+export async function acceptRoomInvite(code, acceptorUid, acceptorUsername) {
+  if (!code) throw new Error("Invite code is required");
+  const inviteRef = doc(db, "invites", code.trim());
+  const snap = await getDoc(inviteRef);
+  if (!snap.exists()) {
+    throw new Error("Invite not found or expired.");
+  }
+  const invite = snap.data();
+  if (invite.status === 'accepted') {
+    throw new Error("This invite was already used.");
+  }
+  if (invite.status === 'cancelled') {
+    throw new Error("This invite was cancelled.");
+  }
+  if (invite.expiresAt && Date.now() > invite.expiresAt) {
+    throw new Error("This invite has expired.");
+  }
+
+  await updateDoc(inviteRef, {
+    status: 'accepted',
+    acceptedByUid: acceptorUid,
+    acceptedByUsername: acceptorUsername,
+    acceptedAt: Date.now()
+  });
+
+  return invite;
+}
+
+/**
+ * Cancel a room invite
+ */
+export async function cancelRoomInvite(code) {
+  if (!code) return;
+  const inviteRef = doc(db, "invites", code.trim());
+  try {
+    await updateDoc(inviteRef, {
+      status: 'cancelled'
+    });
+  } catch {
+    await deleteDoc(inviteRef).catch(() => {});
+  }
+}
+
 export {
   signInWithPopup,
   signInWithRedirect,
